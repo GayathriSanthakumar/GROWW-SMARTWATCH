@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-inter: "Inter", system-ui, sans-serif;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: #f6f7fb;
+  color: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand text-white rounded-lg font-semibold px-4 py-2.5 hover:bg-brand-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+  }
+  .btn-secondary {
+    @apply bg-white text-gray-700 border border-surface-border rounded-lg font-medium px-4 py-2.5 hover:bg-surface-muted transition-colors;
+  }
+  .card {
+    @apply bg-white rounded-xl border border-surface-border;
+  }
+  .input {
+    @apply w-full rounded-lg border border-surface-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold;
+  }
+}
+
+/* flash animation for live price updates */
+@keyframes flash-green {
+  0% { background-color: rgba(22, 163, 74, 0.25); }
+  100% { background-color: transparent; }
+}
+@keyframes flash-red {
+  0% { background-color: rgba(220, 38, 38, 0.22); }
+  100% { background-color: transparent; }
+}
+.flash-up { animation: flash-green 0.9s ease-out; }
+.flash-down { animation: flash-red 0.9s ease-out; }
+
+/* hide scrollbars on horizontal scrollers */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
