@@ -108,25 +108,16 @@ A permanent live link needs a 24/7 host (this repo ships ready for a single Rend
 - `render.yaml` — one-service blueprint (static frontend + API + Socket.IO, single origin, auto-seed).
 - The frontend is a Next.js **static export** (`frontend/out`); the backend can serve it or you can host it on Vercel and point `NEXT_PUBLIC_API_URL`/`NEXT_PUBLIC_WS_URL` at the backend.
 
-### Run the live build (Vercel frontend)
+### Run it (Vercel — recommended)
 
-The Vercel app (`https://groww-smartwatch-frontend.vercel.app`) is the **frontend only** — it talks to the backend over the network, so the backend must be running too.
+The app is deployed on **Vercel** — no install, no keys:
 
-**For reviewers / judges (no setup):**
-
-1. Open **https://groww-smartwatch-frontend.vercel.app/?demo=1** → drops straight into the populated demo dashboard.
-   - Add a trailing `?demo=1` to skip the login screen (auto demo mode). Open the plain URL (`/`) to see the email login/signup form.
-   - Demo login (on the plain `/` page): **demo@smartwatch.app / demo1234**
-2. If login or data fails, the backend isn't reachable — it must be deployed and the frontend pointed at it (below).
-
-**To run the whole stack (frontend + backend) for this build:**
-
-1. Deploy the backend (Express + Postgres) — see [DEPLOY.md](DEPLOY.md). It auto-migrates and seeds the demo account on first boot. You'll get e.g. `https://smartwatch-api.onrender.com`.
-2. On the **backend**, set env: `DATABASE_URL` (Neon), `NODE_ENV=production`, `SEED_DEMO_ACCOUNT=true`, `FRONTEND_URL=https://groww-smartwatch-frontend.vercel.app`, `APP_BASE_URL=https://smartwatch-api.onrender.com`, and `COOKIE_SAMESITE=none` (frontend and API are on different domains).
-3. On **Vercel** (project → Settings → Environment Variables, then redeploy): `NEXT_PUBLIC_API_URL=https://smartwatch-api.onrender.com` and `NEXT_PUBLIC_WS_URL=https://smartwatch-api.onrender.com`.
-4. Keep the free backend warm (Render sleeps after ~15 min idle): an UptimeRobot ping on `https://smartwatch-api.onrender.com/api/health` every 5 minutes.
-
-**Local alternative:** `npm run dev` → open `http://localhost:3000` (no keys, uses the same codebase).
+1. Open **https://groww-smartwatch-frontend.vercel.app/?demo=1** → the demo dashboard loads directly.
+   - Add `?demo=1` to auto-enter demo mode; open the plain URL (`/`) for the email login (**demo@smartwatch.app / demo1234**).
+2. The Vercel app is the frontend and needs the backend running to load live data. Deploy the backend (see below / [DEPLOY.md](DEPLOY.md)), then set these so the app connects:
+   - **Vercel env:** `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` = your backend URL (e.g. `https://smartwatch-api.onrender.com`)
+   - **Backend env:** `FRONTEND_URL=https://groww-smartwatch-frontend.vercel.app`, `COOKIE_SAMESITE=none`, plus `DATABASE_URL`
+3. If you only want to try the UI locally: `npm run dev` → `http://localhost:3000` (also uses the backend on `:4000`).
 
 ---
 
