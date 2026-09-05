@@ -56,51 +56,27 @@ A full-stack Indian-equity **smart market watchlist** built end-to-end (React/Ne
 # Instructions to Run
 
 ##Instructions to Run
--Live Demo
+Live Demo
 
--The project is fully deployed and can be tested directly using the live application:
+The project is fully deployed and can be tested directly using the live application:
 
--Live Demo: https://groww-smartwatch-frontend.vercel.app/
+Live Demo: https://groww-smartwatch-frontend.vercel.app/
 
--Demo Account
+Demo Account
 
--click just exploring?Demo mode
+click just exploring?Demo mode
 
--Or create new account
+Or create new account
 
--The live application is connected to the deployed backend and database. No local setup or configuration is required to test the project.
+The live application is connected to the deployed backend and database. No local setup or configuration is required to test the project.
 
--Reviewers can simply open the live demo link, sign in using the demo credentials above, and explore the application.
+Reviewers can simply open the live demo link, sign in using the demo credentials above, and explore the application.
 
 
-The app is deployed on **Vercel** — no install, no keys:
+The app is deployed on **Vercel** — no install, no keys
 
-1. Open **https://groww-smartwatch-frontend.vercel.app/?demo=1** → the demo dashboard loads directly.
-   - Add `?demo=1` to auto-enter demo mode; open the plain URL (`/`) for the email login (**demo@smartwatch.app / demo1234**).
-2. The Vercel app is the frontend and needs the backend running to load live data. Deploy the backend (see below / [DEPLOY.md](DEPLOY.md)), then set these so the app connects:
-   - **Vercel env:** `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` = your backend URL (e.g. `https://smartwatch-api.onrender.com`)
-   - **Backend env:** `FRONTEND_URL=https://groww-smartwatch-frontend.vercel.app`, `COOKIE_SAMESITE=none`, plus `DATABASE_URL`
-3. If you only want to try the UI locally: `npm run dev` → `http://localhost:3000` (also uses the backend on `:4000`).
 
----
 
-## Repository structure
-
-```
-backend/   Express API, Postgres schema (RLS), Socket.IO feed, change-detection,
-           insights/validation services, AI Analyst engine, scripts
-frontend/  Next.js app, unified market store, MarketDataProvider/useStockData,
-           watchlist UI, charts, AI Analyst page, error boundaries
-scripts/   dev proxy + source packager for the hackathon upload
-DEPLOY.md  deployment runbooks
-SUBMISSION.md  hackathon submission kit (title/desc/video script/limitations)
-```
-
-## Known limitations (honest)
-
-- Market data is last-close/delayed unless a **licensed** real-time feed is configured (`LIVE_FEED_LICENSED` + broker key). The UI never claims LIVE without one.
-- A few tickers (e.g. TATAMOTORS) can't currently be externally verified by the free sources used; they show a "verification pending" flag rather than false confidence.
-- Long-history candles are application-derived until a broker historical API is connected.
 
 ## Disclaimer
 
