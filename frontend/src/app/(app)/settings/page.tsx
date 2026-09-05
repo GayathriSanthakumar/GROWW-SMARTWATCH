@@ -36,32 +36,47 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    api.get<{ user: Me }>("/api/me").then((d) => {
-      setMe(d.user);
-      setFullName(d.user.fullName);
-      setKnowledge(d.user.knowledgeLevel);
-      setRisk(d.user.riskAppetite);
-    });
-    api.get<{ sessions: Session[] }>("/api/auth/sessions").then((d) => setSessions(d.sessions));
-    api.get<{ plan: string }>("/api/me/entitlements").then((d) => setEntitlements(d));
+    api
+      .get<{ user: Me }>("/api/me")
+      .then((d) => {
+        setMe(d.user);
+        setFullName(d.user.fullName);
+        setKnowledge(d.user.knowledgeLevel);
+        setRisk(d.user.riskAppetite);
+      })
+      .catch(() => {});
+    api.get<{ sessions: Session[] }>("/api/auth/sessions").then((d) => setSessions(d.sessions)).catch(() => {});
+    api.get<{ plan: string }>("/api/me/entitlements").then((d) => setEntitlements(d)).catch(() => {});
   }, []);
 
   async function save() {
-    await api.patch("/api/me", { fullName, knowledgeLevel: knowledge, riskAppetite: risk });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      await api.patch("/api/me", { fullName, knowledgeLevel: knowledge, riskAppetite: risk });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setSaved(false);
+    }
   }
 
   async function revokeSession(id: string) {
-    await api.del(`/api/auth/sessions/${id}`);
-    api.get<{ sessions: Session[] }>("/api/auth/sessions").then((d) => setSessions(d.sessions));
+    try {
+      await api.del(`/api/auth/sessions/${id}`);
+    } catch {
+      /* ignore */
+    }
+    api.get<{ sessions: Session[] }>("/api/auth/sessions").then((d) => setSessions(d.sessions)).catch(() => {});
   }
 
   async function deleteAccount() {
     if (!confirm("Delete your account? This soft-deletes your data (30-day grace period).")) return;
-    await api.del("/api/me");
-    await logout();
-    router.replace("/");
+    try {
+      await api.del("/api/me");
+      await logout();
+      router.replace("/");
+    } catch {
+      /* keep session; deletion needs a working backend */
+    }
   }
 
   return (
@@ -123,12 +138,15 @@ function NewsEmailCard() {
   const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<{ subscription: { email: string; enabled: boolean; frequency: string }; smtpConfigured: boolean }>("/api/news/subscription").then((d) => {
-      setEmail(d.subscription.email);
-      setEnabled(d.subscription.enabled);
-      setFrequency(d.subscription.frequency === "weekly" ? "weekly" : "daily");
-      setSmtp(d.smtpConfigured);
-    });
+    api
+      .get<{ subscription: { email: string; enabled: boolean; frequency: string }; smtpConfigured: boolean }>("/api/news/subscription")
+      .then((d) => {
+        setEmail(d.subscription.email);
+        setEnabled(d.subscription.enabled);
+        setFrequency(d.subscription.frequency === "weekly" ? "weekly" : "daily");
+        setSmtp(d.smtpConfigured);
+      })
+      .catch(() => {});
   }, []);
 
   async function save() {

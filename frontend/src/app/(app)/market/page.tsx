@@ -28,20 +28,28 @@ export default function MarketPage() {
   const [losers, setLosers] = useState<Mover[]>([]);
   const [byVolume, setByVolume] = useState<Mover[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    api.get<{ breadth: Breadth; gainers: Mover[]; losers: Mover[]; byVolume: Mover[] }>("/api/market/overview").then((d) => {
-      setBreadth(d.breadth);
-      setGainers(d.gainers);
-      setLosers(d.losers);
-      setByVolume(d.byVolume);
-    });
-    api.get<{ sectors: Sector[] }>("/api/market/sectors").then((d) => setSectors(d.sectors));
+    api
+      .get<{ breadth: Breadth; gainers: Mover[]; losers: Mover[]; byVolume: Mover[] }>("/api/market/overview")
+      .then((d) => {
+        setBreadth(d.breadth);
+        setGainers(d.gainers);
+        setLosers(d.losers);
+        setByVolume(d.byVolume);
+      })
+      .catch(() => setLoadError("Couldn't load market overview. Data may be temporarily unavailable."));
+    api.get<{ sectors: Sector[] }>("/api/market/sectors").then((d) => setSectors(d.sectors)).catch(() => {});
   }, []);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
       <h1 className="text-xl font-bold mb-4">Market Radar</h1>
+
+      {loadError && (
+        <div className="card mb-4 p-4 text-sm text-amber-700 bg-amber-50 border border-amber-200">{loadError}</div>
+      )}
 
       {breadth && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

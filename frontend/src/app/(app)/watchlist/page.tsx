@@ -9,6 +9,7 @@ import { WatchlistTable } from "@/components/WatchlistTable";
 import { SearchModal } from "@/components/SearchModal";
 import { StockDetailPanel } from "@/components/StockDetailPanel";
 import { WatchlistItemEditor } from "@/components/WatchlistItemEditor";
+import { WhatChangedHub } from "@/components/WhatChangedHub";
 
 export default function WatchlistPage() {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
@@ -117,6 +118,7 @@ export default function WatchlistPage() {
   return (
     <div>
       <IndexStrip />
+      <WhatChangedHub onOpenStock={setDetailId} />
       <div className="mx-auto max-w-7xl px-4 py-4">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-xl font-bold">Watchlist</h1>
@@ -157,7 +159,7 @@ export default function WatchlistPage() {
               <button className="btn-primary" onClick={() => setSearchOpen(true)}>+ Add Stock</button>
             </div>
           ) : (
-            <WatchlistTable items={filteredItems} watchlists={watchlists} onRowClick={setDetailId} onRemove={removeStock} onMove={moveStock} onPin={pinStock} onEditNotes={(id) => setEditingItem(items.find((i) => i.id === id) ?? null)} />
+            <WatchlistTable items={filteredItems} watchlists={watchlists} activeWatchlistId={activeId} onRowClick={setDetailId} onRemove={removeStock} onMove={moveStock} onPin={pinStock} onEditNotes={(id) => setEditingItem(items.find((i) => i.id === id) ?? null)} />
           )}
         </div>
       </div>

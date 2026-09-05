@@ -7,7 +7,19 @@ let io: SocketServer | null = null;
 
 export function initSocket(server: http.Server): SocketServer {
   io = new SocketServer(server, {
-    cors: { origin: config.frontendUrl, credentials: true },
+    cors: {
+      credentials: true,
+      origin(origin, cb) {
+        if (!origin) return cb(null, true);
+        if (origin === config.frontendUrl) return cb(null, true);
+        const devOrTunnel =
+          origin.startsWith("http://localhost") ||
+          origin.startsWith("http://127.0.0.1") ||
+          /\.trycloudflare\.com$|\.ngrok(-free)?\.dev$|\.loca\.lt$|\.ngrok\.io$/.test(origin);
+        if (config.nodeEnv !== "production" || devOrTunnel) return cb(null, true);
+        return cb(null, false);
+      },
+    },
   });
 
   io.use((socket, next) => {
@@ -59,5 +71,9 @@ export function emitToUser(userId: string, event: string, data: unknown) {
 }
 
 export function emitToInstrument(instrumentId: string, event: string, data: unknown) {
-  io?.to(`instrument:${instrumentId}`).emit(event, data);
+  // Only fan out to an instrument room if someone is actually listening.
+  // With ~800+ instruments ticking every few seconds this avoids emitting
+  // into hundreds of empty rooms on every cycle.
+  const room = io?.sockets.adapter.rooms.get(`instrument:${instrumentId}`);
+  if (room && room.size > 0) io!.to(`instrument:${instrumentId}`).emit(event, data);
 }

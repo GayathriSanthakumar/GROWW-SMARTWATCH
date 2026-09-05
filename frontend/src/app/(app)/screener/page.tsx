@@ -7,6 +7,7 @@ import type { Instrument } from "@/lib/types";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { ScorePill } from "@/components/ScorePill";
 import { StockDetailPanel } from "@/components/StockDetailPanel";
+import { useMarket } from "@/store/market";
 
 const SECTORS = ["Banking", "IT", "FMCG", "Auto", "Energy", "Metals", "Pharma", "Power", "Cement", "Consumer", "Telecom", "Infrastructure", "Conglomerate", "NBFC", "Index ETF", "Sector ETF", "Commodity ETF"];
 
@@ -23,6 +24,8 @@ export default function ScreenerPage() {
   const [sectors, setSectors] = useState<string[]>([]);
   const [shariaOnly, setShariaOnly] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const quotes = useMarket((s) => s.quotes);
+  const setQuotes = useMarket((s) => s.setQuotes);
 
   const run = useCallback(async (f: Record<string, string>) => {
     const params = new URLSearchParams(f);
@@ -30,10 +33,19 @@ export default function ScreenerPage() {
     if (shariaOnly) params.set("sharia", "compliant");
     const d = await api.get<{ results: Instrument[] }>(`/api/screener?${params.toString()}`);
     setResults(d.results);
-  }, [sectors, shariaOnly]);
+    // Publish the DB snapshot into the shared store (single source of truth).
+    setQuotes(
+      Object.fromEntries(
+        d.results.map((r) => [
+          r.id,
+          { ltp: Number(r.ltp), prevClose: Number(r.prevClose), changeAbs: Number(r.change), changePct: Number(r.changePct), volume: Number(r.volume) },
+        ]),
+      ),
+    );
+  }, [sectors, shariaOnly, setQuotes]);
 
   useEffect(() => {
-    api.get<{ presets: Preset[] }>("/api/screener/presets").then((d) => setPresets(d.presets));
+    api.get<{ presets: Preset[] }>("/api/screener/presets").then((d) => setPresets(d.presets)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -50,13 +62,66 @@ export default function ScreenerPage() {
     const name = prompt("Name this screen:");
     if (!name) return;
     await api.post("/api/screens", { name, filters: { ...filters, sectors, shariaOnly } });
+    loadScreens();
+  }
+
+  interface SavedScreen { id: string; name: string; filters?: Record<string, unknown> }
+  const [savedScreens, setSavedScreens] = useState<SavedScreen[]>([]);
+  const [sel, setSel] = useState("");
+
+  async function loadScreens() {
+    try {
+      const d = await api.get<{ screens: SavedScreen[] }>("/api/screens");
+      setSavedScreens(d.screens || []);
+    } catch {
+      /* ignore */
+    }
+  }
+  useEffect(() => {
+    loadScreens();
+  }, []);
+
+  async function loadScreen(id: string) {
+    const all = await api.get<{ screens: SavedScreen[] }>("/api/screens").catch(() => null);
+    const hit = all?.screens.find((s) => s.id === id);
+    if (!hit?.filters) return;
+    const f = hit.filters as Record<string, string | string[] | boolean>;
+    const clean: Record<string, string> = { sort: "opportunity", order: "desc" };
+    for (const [k, v] of Object.entries(f)) {
+      if (k === "sectors" || k === "shariaOnly") continue;
+      if (typeof v === "string") clean[k] = v;
+    }
+    setFilters(clean);
+    setSectors(Array.isArray(f.sectors) ? (f.sectors as string[]) : []);
+    setShariaOnly(Boolean(f.shariaOnly));
+    setSel(id);
+  }
+
+  async function deleteScreen() {
+    if (!sel) return;
+    await api.del(`/api/screens/${sel}`);
+    setSel("");
+    loadScreens();
   }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">Screener</h1>
-        <button className="btn-secondary" onClick={saveScreen}>Save screen</button>
+        <div className="flex items-center gap-2">
+          {savedScreens.length > 0 && (
+            <div className="flex items-center gap-1">
+              <select className="input !py-1.5 text-sm max-w-[180px]" value={sel} onChange={(e) => { const v = e.target.value; if (v) loadScreen(v); }}>
+                <option value="">My screens…</option>
+                {savedScreens.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <button className="text-down text-sm" title="Delete screen" onClick={deleteScreen} disabled={!sel}>🗑</button>
+            </div>
+          )}
+          <button className="btn-secondary" onClick={saveScreen}>Save screen</button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -133,21 +198,26 @@ export default function ScreenerPage() {
             </tr>
           </thead>
           <tbody>
-            {results.map((r) => (
+            {results.map((r) => {
+              const q = quotes[r.id];
+              const ltp = q?.ltp ?? r.ltp;
+              const pct = q?.changePct ?? r.changePct;
+              return (
               <tr key={r.id} className="border-b border-surface-border hover:bg-surface-muted/50 cursor-pointer" onClick={() => setDetailId(r.id)}>
                 <td className="py-2.5 px-3">
                   <div className="font-semibold">{r.symbol}</div>
                   <div className="text-xs text-gray-500">{r.companyName}</div>
                 </td>
-                <td className="py-2.5 px-3 text-right font-semibold tabular-nums">{formatINR(r.ltp)}</td>
-                <td className={`py-2.5 px-3 text-right tabular-nums ${r.changePct >= 0 ? "text-up" : "text-down"}`}>{formatPercent(r.changePct)}</td>
+                <td className="py-2.5 px-3 text-right font-semibold tabular-nums">{formatINR(ltp)}</td>
+                <td className={`py-2.5 px-3 text-right tabular-nums ${pct >= 0 ? "text-up" : "text-down"}`}>{formatPercent(pct)}</td>
                 <td className="py-2.5 px-3"><ScorePill label="" value={r.scores.opportunity} /></td>
                 <td className="py-2.5 px-3"><ScorePill label="" value={r.scores.risk} invert /></td>
                 <td className="py-2.5 px-3"><ScorePill label="" value={r.scores.alphaGrowth} /></td>
                 <td className="py-2.5 px-3"><VerdictBadge verdict={r.scores.aiVerdict} /></td>
                 <td className="py-2.5 px-3 text-xs text-gray-500">{marketCapLabel(r.fundamentals.marketCap)}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
         {results.length === 0 && <div className="p-8 text-center text-gray-400">No matches. Try widening filters.</div>}

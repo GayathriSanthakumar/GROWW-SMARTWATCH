@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/store/auth";
@@ -20,22 +20,67 @@ const LEVELS = ["beginner", "intermediate", "advanced"] as const;
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { user, initialized } = useAuth();
   const fetchMe = useAuth((s) => s.fetchMe);
   const [step, setStep] = useState(1);
   const [goals, setGoals] = useState<string[]>([]);
   const [level, setLevel] = useState<string>("beginner");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  // Onboarding requires an authenticated session (it persists goals/level to the
+  // account). Hydrate the session on mount so the UI doesn't sit on a splash:
+  // if there is no token yet (e.g. deep-linked before the auth cookie was
+  // written) fetchMe resolves to user=null and we redirect home instead of
+  // firing a PUT that would 401 into a crash.
+  useEffect(() => {
+    fetchMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!initialized) {
+    return (
+      <div className="min-h-screen grid place-items-center text-sm text-gray-400">
+        Checking your session…
+      </div>
+    );
+  }
+
+  if (!user) {
+    // No session -> return to landing (login/signup/demo) instead of crashing.
+    return (
+      <div className="min-h-screen grid place-items-center text-sm text-gray-400">
+        <button
+          className="text-brand font-medium hover:underline"
+          onClick={() => {
+            router.replace("/");
+          }}
+        >
+          Your session ended — go back to log in →
+        </button>
+      </div>
+    );
+  }
 
   function toggleGoal(id: string) {
     setGoals((g) => (g.includes(id) ? g.filter((x) => x !== id) : [...g, id]));
   }
 
   async function finish() {
+    if (!user) return;
     setBusy(true);
+    setError("");
     try {
       await api.put("/api/auth/onboarding", { goals, knowledgeLevel: level, riskAppetite: "moderate" });
       await fetchMe();
       router.push("/watchlist");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      if (err instanceof Error && "status" in err && (err as { status?: number }).status === 401) {
+        setError("Your session expired. Please log in again.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setBusy(false);
     }
@@ -52,6 +97,10 @@ export default function OnboardingPage() {
         <div className="h-1.5 rounded-full bg-surface-muted mb-8">
           <div className="h-full rounded-full bg-brand transition-all" style={{ width: step === 1 ? "50%" : "100%" }} />
         </div>
+
+        {error && (
+          <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-down">{error}</div>
+        )}
 
         {step === 1 && (
           <>
@@ -95,7 +144,7 @@ export default function OnboardingPage() {
               ))}
             </div>
             <div className="flex gap-3 mt-6">
-              <button className="btn-secondary flex-1" onClick={() => setStep(1)}>
+              <button className="btn-secondary flex-1" disabled={busy} onClick={() => setStep(1)}>
                 Back
               </button>
               <button className="btn-primary flex-1" disabled={busy} onClick={finish}>

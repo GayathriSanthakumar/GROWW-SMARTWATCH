@@ -2,9 +2,20 @@ import { Router } from "express";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { query } from "../db/pool.js";
 import { optionalAuth } from "../middleware/auth.js";
+import { getMarketStatus } from "../services/marketStatus.js";
+import { getProvider } from "../services/marketData.js";
 
 const router = Router();
 router.use(optionalAuth);
+
+// GET /api/market/status — IST market hours, next session, data mode
+router.get(
+  "/status",
+  asyncHandler(async (_req, res) => {
+    const status = getProvider().getMarketStatus();
+    res.json(status);
+  }),
+);
 
 // GET /api/market/indices
 router.get(

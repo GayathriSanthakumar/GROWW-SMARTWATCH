@@ -5,13 +5,32 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/store/auth";
 import { api } from "@/lib/api";
+import { getSocket } from "@/lib/socket";
+
+interface NotificationItem {
+  id: string;
+  title: string;
+  body: string | null;
+  symbol: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+function fmtAgo(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 const LINKS = [
   { href: "/watchlist", label: "Watchlist" },
   { href: "/screener", label: "Screener" },
   { href: "/ai", label: "AI Analyst" },
   { href: "/portfolio", label: "Portfolio" },
-  { href: "/blueprint", label: "Blueprint" },
   { href: "/market", label: "Market" },
   { href: "/education", label: "Learn" },
 ];
@@ -23,16 +42,56 @@ export function Navbar() {
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifs, setNotifs] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
-    api.get<{ count: number }>("/api/notifications/unread-count").then((d) => setUnread(d.count)).catch(() => {});
-    const onNotif = (e: Event) => {
+    let mounted = true;
+    const loadCount = () =>
+      api.get<{ count: number }>("/api/notifications/unread-count").then((d) => mounted && setUnread(d.count)).catch(() => {});
+    const loadList = () =>
+      api.get<{ notifications: NotificationItem[] }>("/api/notifications").then((d) => mounted && setNotifs(d.notifications.slice(0, 12))).catch(() => {});
+    loadCount();
+    loadList();
+
+    // Live updates: the server pushes unread counts + a changes signal on each
+    // user's socket room whenever a change is detected or an alert fires.
+    const socket = getSocket();
+    const onNotif = (d: { unread?: number }) => {
+      if (d?.unread !== undefined) setUnread(d.unread);
+      loadList();
+    };
+    const onChange = () => {
+      loadCount();
+      loadList();
+    };
+    socket.on("notifications", onNotif);
+    socket.on("changes", onChange);
+    // Local apps can also refresh the badge (e.g. after "reviewed" catch-up).
+    const onWin = (e: Event) => {
       const detail = (e as CustomEvent).detail as { unread?: number };
       if (detail?.unread !== undefined) setUnread(detail.unread);
+      loadList();
     };
-    window.addEventListener("smartwatch:notifications", onNotif);
-    return () => window.removeEventListener("smartwatch:notifications", onNotif);
+    window.addEventListener("smartwatch:notifications", onWin);
+    return () => {
+      mounted = false;
+      socket.off("notifications", onNotif);
+      socket.off("changes", onChange);
+      window.removeEventListener("smartwatch:notifications", onWin);
+    };
   }, []);
+
+  async function markAllRead() {
+    await api.post("/api/notifications/read-all");
+    setUnread(0);
+    setNotifs((n) => n.map((x) => ({ ...x, is_read: true })));
+  }
+
+  async function markRead(id: string) {
+    await api.patch(`/api/notifications/${id}`, { isRead: true });
+    setUnread((u) => Math.max(0, u - 1));
+    setNotifs((n) => n.map((x) => (x.id === id ? { ...x, is_read: true } : x)));
+  }
 
   async function doLogout() {
     await logout();
@@ -76,12 +135,38 @@ export function Navbar() {
               )}
             </button>
             {notifOpen && (
-              <div className="absolute right-0 mt-2 w-72 card shadow-lg p-3 z-50">
-                <div className="flex items-center justify-between mb-2">
+              <div className="absolute right-0 mt-2 w-80 card shadow-lg p-0 z-50 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-surface-border">
                   <span className="font-semibold text-sm">Notifications</span>
-                  <Link href="/alerts" className="text-xs text-brand">View all</Link>
+                  <div className="flex items-center gap-2">
+                    {unread > 0 && (
+                      <button className="text-xs text-brand hover:underline" onClick={markAllRead}>
+                        Mark all read
+                      </button>
+                    )}
+                    <Link href="/alerts" className="text-xs text-gray-500 hover:text-gray-700" onClick={() => setNotifOpen(false)}>
+                      View all →
+                    </Link>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-400">Open the Alerts page to see and manage notifications.</p>
+                <div className="max-h-80 overflow-y-auto divide-y divide-surface-border">
+                  {notifs.length === 0 ? (
+                    <p className="text-xs text-gray-400 p-4">No notifications yet. Changes and alerts will appear here.</p>
+                  ) : (
+                    notifs.map((n) => (
+                      <button key={n.id} className="w-full text-left px-3 py-2.5 hover:bg-surface-muted/60 flex items-start gap-2" onClick={() => (n.is_read ? undefined : markRead(n.id))}>
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${n.is_read ? "bg-surface-border" : "bg-brand"}`} />
+                        <span className="min-w-0">
+                          <span className={`block text-xs font-semibold ${n.is_read ? "text-gray-500" : "text-gray-900"}`}>
+                            {n.symbol ? `${n.symbol} · ` : ""}{n.title}
+                          </span>
+                          {n.body && <span className="block text-xs text-gray-500 truncate">{n.body}</span>}
+                          <span className="block text-[10px] text-gray-400 mt-0.5">{fmtAgo(n.created_at)}</span>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>

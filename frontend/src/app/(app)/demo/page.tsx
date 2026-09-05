@@ -15,7 +15,7 @@ export default function DemoPage() {
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    api.get<{ scenarios: Scenario[] }>("/api/demo/status").then((d) => setScenarios(d.scenarios));
+    api.get<{ scenarios: Scenario[] }>("/api/demo/status").then((d) => setScenarios(d.scenarios)).catch(() => {});
   }, []);
 
   async function trigger(id: string, name: string) {

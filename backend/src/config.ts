@@ -46,6 +46,28 @@ export const config = {
   },
 
   universeLimit: Number(process.env.UNIVERSE_LIMIT || 800),
+
+  // Directory of the built static frontend (Next `output: export`). When set,
+  // the backend also serves the SPA from the same origin — perfect for a single
+  // Render service. Leave blank to run the frontend separately (dev).
+  staticDir: process.env.STATIC_DIR || "",
+
+  // Optional licensed broker feed (leave blank → demo provider)
+  kiteApiKey: process.env.KITE_API_KEY || "",
+
+  // A LIVE badge is only honest when a licensed real-time feed is configured.
+  // Free/delayed sources (TradingView public scanner, Yahoo, sim) must label as
+  // DELAYED/DEMO. Set LIVE_FEED_LICENSED=true ONLY with an authorized broker
+  // market-data subscription.
+  liveFeedLicensed: toBool(process.env.LIVE_FEED_LICENSED, false),
+
+  // Demo/testing: force the market to look OPEN (REGULAR) so live-tick behaviour
+  // can be exercised outside NSE/BSE hours. Never set in production.
+  simulateMarketOpen: toBool(process.env.SIMULATE_MARKET_OPEN, false),
+
+  // Demo/testing: skip TradingView and run the simulator (deterministic moves)
+  // so live-refresh behaviour can be demonstrated offline.
+  forceSimulator: toBool(process.env.FORCE_SIMULATOR, false),
 };
 
 export type Config = typeof config;

@@ -9,6 +9,7 @@ import { GoogleButton } from "@/components/auth/GoogleButton";
 export default function LandingPage() {
   const router = useRouter();
   const { user, initialized, setUser } = useAuth();
+  const fetchMe = useAuth((s) => s.fetchMe);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,9 +18,26 @@ export default function LandingPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Hydrate the session once on mount: if a returning user has cookies, send
+  // them to the dashboard; if not, stay on the landing page. Without this the
+  // store never becomes "initialized" and auto-actions below can't fire.
+  useEffect(() => {
+    fetchMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (initialized && user) router.replace("/watchlist");
   }, [initialized, user, router]);
+
+  // ?demo=1 deep-links straight into the demo dashboard (no manual login).
+  useEffect(() => {
+    if (!initialized || user) return;
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "1") {
+      enterDemo();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialized, user]);
 
   const passwordHint = () => {
     if (!password) return null;
@@ -91,7 +109,7 @@ export default function LandingPage() {
           <ul className="mt-6 space-y-2 text-sm text-gray-600">
             <li>• Your own live-updating watchlists, isolated per user</li>
             <li>• AI verdict badges, Alpha Growth &amp; Smart Money scores</li>
-            <li>• Wealth Blueprint, ETF &amp; Sharia screening</li>
+            <li>• AI verdict badges, Alpha Growth &amp; Smart Money scores</li>
           </ul>
         </div>
 

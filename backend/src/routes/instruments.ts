@@ -118,6 +118,30 @@ router.get(
   }),
 );
 
+// POST /api/instruments/candles/batch — { instrumentIds, interval, limit }
+// One request serves many rows (watchlist Trend) instead of a fetch per row.
+router.post(
+  "/candles/batch",
+  asyncHandler(async (req, res) => {
+    const ids = (req.body?.instrumentIds ?? []) as string[];
+    const interval = String(req.body?.interval || "1d") as import("../services/candleService.js").CandleInterval;
+    const limit = Math.min(Number(req.body?.limit) || 40, 120);
+    if (!Array.isArray(ids) || ids.length === 0) throw new Error("instrumentIds required");
+    if (ids.length > 120) ids.splice(120);
+    const out: Record<string, unknown[]> = {};
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          out[id] = await getCandles(id, interval, limit);
+        } catch {
+          out[id] = [];
+        }
+      }),
+    );
+    res.json({ candles: out });
+  }),
+);
+
 // GET /api/instruments/:id/news
 router.get(
   "/:id/news",

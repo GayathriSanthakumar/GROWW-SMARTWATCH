@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { formatINR, formatPercent, formatCompact } from "@/lib/format";
 import type { PortfolioPosition } from "@/lib/types";
 import { VerdictBadge } from "@/components/VerdictBadge";
+import { useMarket } from "@/store/market";
 
 const PIE_COLORS = ["#5367ff", "#16a34a", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899", "#f97316", "#84cc16"];
 
@@ -26,6 +27,9 @@ export default function PortfolioPage() {
   const [days, setDays] = useState<{ date: string; pnl: number }[]>([]);
   const [goalName, setGoalName] = useState("");
   const [goalTarget, setGoalTarget] = useState("");
+  const [holdFilter, setHoldFilter] = useState("all");
+  const quotes = useMarket((s) => s.quotes);
+  const setQuotes = useMarket((s) => s.setQuotes);
 
   async function load() {
     const [p, s, a, g, c] = await Promise.all([
@@ -36,6 +40,9 @@ export default function PortfolioPage() {
       api.get<{ days: { date: string; pnl: number }[] }>("/api/portfolio/calendar"),
     ]);
     setPositions(p.positions);
+    const m: Record<string, { ltp: number }> = {};
+    for (const pos of p.positions) m[pos.instrumentId] = { ltp: Number(pos.ltp) };
+    setQuotes(m);
     setSummary(s.summary);
     setBySector(a.bySector);
     setByType(a.byType);
@@ -130,6 +137,19 @@ export default function PortfolioPage() {
         </div>
       )}
 
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-sm font-semibold">Holdings</h2>
+        {goals.length >= 2 && (
+          <select className="input max-w-xs !py-1.5 text-sm" value={holdFilter} onChange={(e) => setHoldFilter(e.target.value)}>
+            <option value="all">All portfolios</option>
+            {goals.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        )}
+        <span className="text-[11px] text-gray-400">Positions are stored under the portfolio (goal) selected when added.</span>
+      </div>
+
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -144,12 +164,19 @@ export default function PortfolioPage() {
             </tr>
           </thead>
           <tbody>
-            {positions.map((p) => (
+            {(holdFilter === "all" ? positions : positions.filter((p) => p.goalId === holdFilter)).map((p) => {
+              const live = quotes[p.instrumentId];
+              const qLtp = live?.ltp ?? p.ltp;
+              const buy = Number(p.buyPrice || 0);
+              const qty = Number(p.quantity || 0);
+              const pnl = live?.ltp != null && buy > 0 ? (qLtp - buy) * qty : Number(p.pnl);
+              const pnlPct = live?.ltp != null && buy > 0 ? ((qLtp - buy) / buy) * 100 : Number(p.pnlPct);
+              return (
               <tr key={p.id} className="border-b border-surface-border hover:bg-surface-muted/50">
                 <td className="py-2.5 px-3"><div className="font-semibold">{p.symbol}</div><div className="text-xs text-gray-500">{p.companyName}</div></td>
-                <td className="py-2.5 px-3 text-right tabular-nums">{p.quantity}</td>
-                <td className="py-2.5 px-3 text-right tabular-nums">{formatINR(p.ltp)}</td>
-                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.pnl >= 0 ? "text-up" : "text-down"}`}>{formatINR(p.pnl)} ({formatPercent(p.pnlPct)})</td>
+                <td className="py-2.5 px-3 text-right tabular-nums">{qty}</td>
+                <td className="py-2.5 px-3 text-right tabular-nums">{formatINR(qLtp)}</td>
+                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${pnl >= 0 ? "text-up" : "text-down"}`}>{formatINR(pnl)} ({formatPercent(pnlPct)})</td>
                 <td className="py-2.5 px-3"><VerdictBadge verdict={p.scores.aiVerdict} /></td>
                 <td className="py-2.5 px-3">
                   <select className="input !py-1 !px-2 text-xs max-w-[140px]" value={p.goalId ?? ""} onChange={(e) => assignGoal(p.id, e.target.value)}>
@@ -159,7 +186,8 @@ export default function PortfolioPage() {
                 </td>
                 <td className="py-2.5 px-3 text-right"><button className="text-down text-xs" onClick={() => removePosition(p.id)}>Remove</button></td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
         {positions.length === 0 && <div className="p-8 text-center text-gray-400">No positions yet. Open a stock and use &quot;Add to Portfolio&quot;.</div>}

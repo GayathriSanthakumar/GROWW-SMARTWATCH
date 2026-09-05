@@ -65,15 +65,17 @@ export function GoogleButton({ onDone }: { onDone: (isNewUser: boolean) => void 
         <button
           type="button"
           disabled={loading}
-          onClick={() =>
-            setNotice("Google sign-in is not configured yet. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID (frontend) and GOOGLE_CLIENT_ID (backend) in your .env, then restart. For now, use email or Demo Mode.")
-          }
-          className="w-full flex items-center justify-center gap-3 rounded-lg border border-surface-border bg-white px-4 py-2.5 font-medium text-gray-700 hover:bg-surface-muted disabled:opacity-50"
+          onClick={() => setNotice("Google sign-in is optional for this demo. Use email login or Demo Mode instead.")}
+          className="w-full flex items-center justify-center gap-3 rounded-lg border border-surface-border bg-surface-muted/40 px-4 py-2.5 font-medium text-gray-400 cursor-not-allowed disabled:opacity-50"
         >
           <GoogleG />
           Continue with Google
         </button>
-        {notice && <p className="mt-2 text-xs text-amber-600">{notice}</p>}
+        {notice ? (
+          <p className="mt-2 text-xs text-gray-400">{notice}</p>
+        ) : (
+          <p className="mt-2 text-center text-[11px] text-gray-400">Optional — email &amp; Demo Mode work without it.</p>
+        )}
       </div>
     );
   }

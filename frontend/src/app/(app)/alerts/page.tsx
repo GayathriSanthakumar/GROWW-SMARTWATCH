@@ -28,22 +28,34 @@ export default function AlertsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   function load() {
-    api.get<{ alerts: Alert[] }>("/api/alerts").then((d) => setAlerts(d.alerts));
-    api.get<{ notifications: Notification[] }>("/api/notifications").then((d) => setNotifications(d.notifications));
+    api.get<{ alerts: Alert[] }>("/api/alerts").then((d) => setAlerts(d.alerts)).catch(() => {});
+    api.get<{ notifications: Notification[] }>("/api/notifications").then((d) => setNotifications(d.notifications)).catch(() => {});
   }
 
   useEffect(load, []);
 
   async function toggleAlert(id: string, isActive: boolean) {
-    await api.patch(`/api/alerts/${id}`, { isActive });
+    try {
+      await api.patch(`/api/alerts/${id}`, { isActive });
+    } catch {
+      /* ignore — list reload reconciles */
+    }
     load();
   }
   async function deleteAlert(id: string) {
-    await api.del(`/api/alerts/${id}`);
+    try {
+      await api.del(`/api/alerts/${id}`);
+    } catch {
+      /* ignore */
+    }
     load();
   }
   async function markAllRead() {
-    await api.post("/api/notifications/read-all");
+    try {
+      await api.post("/api/notifications/read-all");
+    } catch {
+      /* ignore */
+    }
     load();
   }
 

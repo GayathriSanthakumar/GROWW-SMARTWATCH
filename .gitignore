@@ -18,3 +18,5 @@ npm-debug.log*
 .DS_Store
 coverage/
 .vercel
+frontend/out/
+review-shots/

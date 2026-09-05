@@ -1,4 +1,21 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const isLoopbackUrl = (u: string) => /localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]/.test(u);
+
+function resolveBase(): string {
+  const explicit = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const pageIsLocal = host === "" || host === "localhost" || host === "127.0.0.1";
+  if (explicit) {
+    // A build/dev .env may pin http://localhost:4000. That is only correct when
+    // the page itself is served from localhost — a remote visitor must NEVER be
+    // pointed at their own machine (Chrome blocks it and it 404s for everyone
+    // else). Prefer same-origin through the reverse proxy in that case.
+    if (!pageIsLocal && isLoopbackUrl(explicit)) return window.location.origin;
+    return explicit; // public URL (deploy) or relative ""/"/api" config
+  }
+  return pageIsLocal ? "http://localhost:4000" : window.location.origin;
+}
+
+const API_BASE = resolveBase();
 
 export class ApiError extends Error {
   status: number;

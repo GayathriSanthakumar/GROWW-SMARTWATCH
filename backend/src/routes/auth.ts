@@ -5,7 +5,7 @@ import { query } from "../db/pool.js";
 import { hashPassword, verifyPassword, PASSWORD_RULE } from "../lib/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken, hashToken, randomToken } from "../lib/jwt.js";
 import { setAuthCookies, clearAuthCookies, REFRESH_COOKIE } from "../lib/cookies.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import { loginLimiter } from "../middleware/rateLimit.js";
 import { badRequest, conflict, unauthorized } from "../lib/errors.js";
 import { config } from "../config.js";
@@ -181,8 +181,16 @@ router.post(
   }),
 );
 
-// GET /api/auth/me
-router.get("/me", requireAuth, (req, res) => res.json({ user: req.user }));
+// GET /api/auth/me — guest-friendly: returns { user: null } (200) instead of a
+// noisy 401 when there is no/expired session, so the client can hydrate its
+// auth state without triggering console errors on the public landing page.
+router.get(
+  "/me",
+  optionalAuth,
+  asyncHandler(async (req, res) => {
+    res.json({ user: (req as { user?: AuthUser }).user ?? null });
+  }),
+);
 
 // GET /api/auth/sessions
 router.get(

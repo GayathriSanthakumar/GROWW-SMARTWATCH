@@ -426,3 +426,54 @@ ALTER TABLE email_digests ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS email_digests_isolation ON email_digests;
 CREATE POLICY email_digests_isolation ON email_digests
   USING (user_id = current_setting('app.current_user_id', true)::uuid);
+
+-- ============================================================
+-- SCALING & MEMORY: hot-path indexes + visit tracking (idempotent)
+-- ============================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_memory_review_at TIMESTAMPTZ;
+
+-- "What changed since last view": append-only snapshots captured each time a
+-- user views/analyzes a company. We never overwrite; the latest two rows power
+-- the previous-vs-current comparison. Stored values come straight from live
+-- ticks + scores (nothing is fabricated or backfilled).
+CREATE TABLE IF NOT EXISTS company_snapshots (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  instrument_id     UUID NOT NULL REFERENCES instruments(id) ON DELETE CASCADE,
+  snapshot_at       TIMESTAMPTZ DEFAULT now(),
+  price             NUMERIC,
+  prev_close        NUMERIC,
+  change_abs        NUMERIC,
+  change_pct        NUMERIC,
+  opportunity       INT,
+  risk              INT,
+  alpha_growth      INT,
+  smart_money       INT,
+  pe                NUMERIC,
+  dividend_yield    NUMERIC,
+  fair_value_status TEXT,
+  ai_verdict        TEXT,
+  rsi               NUMERIC,
+  ema20             NUMERIC,
+  ema50             NUMERIC,
+  trend_label       TEXT,
+  technical_json    JSONB DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_company_snapshots_user_instrument ON company_snapshots (user_id, instrument_id, snapshot_at DESC);
+
+ALTER TABLE company_snapshots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS company_snapshots_isolation ON company_snapshots;
+CREATE POLICY company_snapshots_isolation ON company_snapshots
+  USING (user_id = current_setting('app.current_user_id', true)::uuid);
+
+-- "What changed since you were here" needs the last visit per user.
+CREATE INDEX IF NOT EXISTS idx_price_ticks_updated ON price_ticks (updated_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications (user_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alerts_user ON alerts (user_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts (is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_ai_conversations_user ON ai_conversations (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_change_events_user_reviewed ON change_events (user_id, reviewed, detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens (token_hash);
+CREATE INDEX IF NOT EXISTS idx_watchlist_items_instrument ON watchlist_items (instrument_id);
+CREATE INDEX IF NOT EXISTS idx_news_items_instrument ON news_items (instrument_id, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scores_attention ON instrument_scores (attention_score);

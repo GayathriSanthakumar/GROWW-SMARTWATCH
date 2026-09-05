@@ -62,7 +62,7 @@ Open http://localhost:3000 → click **"Try Demo Mode"** or log in with the demo
 ## What's implemented (spec mapping)
 
 - **Tier 0 — Auth & onboarding**: email/password (bcrypt, rate-limited), Google OAuth (server-verified; runs as a labelled stub until `GOOGLE_CLIENT_ID` is set), JWT access + rotating refresh tokens, session management, goal-picker onboarding, knowledge-level quiz, demo mode.
-- **Tier 1/2 — Personal market memory & change detection**: `user_instrument_memory` baseline per (user, instrument); a background worker detects price/volume changes since last review and emits `change_events` + notifications.
+- **Tier 1/2 — Personal market memory & change detection**: `user_instrument_memory` baseline per (user, instrument); a background worker detects meaningful changes since last review — price moves ≥ 2%, volume ≥ 1.5×, attention shifts ≥ 15 pts — and emits `change_events` + notifications in a single batched SQL pass. The watchlist home has a **"Since you were last here"** hub that summarises what changed while you were away and baselines everything in one click (`/api/memory/summary`, `/api/memory/catchup`).
 - **Tier 3/4 — Scoring & watchlists**: deterministic Opportunity / Risk / Attention / Financial Strength scores; multi-watchlist CRUD.
 - **Tier 5/6 — Market intelligence**: index ticker, market breadth, sector performance, institutional holdings, news.
 - **Tier 7 — Screener**: 30+ filterable params + presets (Alpha Leaders, Emerging Winners, Safe Bets, Sharia, etc.) + save/restore screens.
@@ -70,9 +70,10 @@ Open http://localhost:3000 → click **"Try Demo Mode"** or log in with the demo
 - **Tier 9/10 — Education & portfolio**: lessons, simulated portfolio tracking (no brokerage), investment journal.
 - **Tier 11/12 — Alerts & live updates**: trigger-builder alerts, Socket.IO tick streams, live index strip. Prices stream live from **TradingView's public India scanner API** (~3s, NSE live + BSE every 30s), with a local simulator fallback when offline.
 - **Full market universe**: on boot, SMARTWATCH imports the top ~400 Indian companies (by market cap) from TradingView — search, screener, charts and AI all cover every major listed company, each with NSE + BSE quotes and candlestick history. Raise `UNIVERSE_LIMIT` to import more.
-- **Tier 13/14/15 — Reliability & demo mode**: data-status badges (LIVE/DELAYED/STALE/CONFLICT), a Demo Control Center with seeded scenarios, Redis read-through cache with in-memory fallback.
+- **Tier 13/14/15 — Reliability & demo mode**: data-status badges (LIVE/DELAYED/STALE/CONFLICT), a Demo Control Center with seeded scenarios, Redis read-through cache with in-memory fallback. Staleness and NSE-vs-BSE conflicts are **auto-detected** while the market is open (rows not refreshed in 3 min → STALE; divergent exchanges → CONFLICT), and `/api/market/status` reports the live feed source + freshness instead of a hardcoded mode.
+- **Scaling (workers)**: the 3s market feed and 30s change-detection/alert loops are batched — the ~800-instrument TradingView sync now writes with a handful of multi-row `unnest()` statements (not ~800 sequential UPDATEs), per-instrument Socket.IO emits only go to rooms with subscribers, alert evaluation uses one batched tick query and only computes indicators when a condition needs them, and change detection is a single SQL statement per user. Hot-path indexes were added for notifications/alerts/memory/conversations/ticks.
 - **Tier 16 — Groww-style watchlist UI**: live index strip, multi-tab watchlists (drag reorder, rename/delete, create), sparkline trend column, 52-week range slider, slide-over stock detail panel with "Add to Portfolio" / "Set Alert" tabs, column picker, search/add-stocks modal.
-- **Tier 17 — Warifin-style intelligence**: AI verdict badges (BUY-lean/HOLD/WATCH/AVOID-lean), AI company summary, Wealth Blueprint, Alpha Growth Score, Smart Money Score, ETF intelligence, Sharia screening.
+- **Tier 17 — Warifin-style intelligence**: AI verdict badges (BUY-lean/HOLD/WATCH/AVOID-lean), AI company summary, Alpha Growth Score, Smart Money Score, ETF intelligence, Sharia screening.
 - **Email news digest**: subscribe to a daily/weekly email of watchlist news + top movers. Sends via SMTP when `SMTP_HOST` is set, otherwise shows a preview (works fully offline).
 
 ## Database schema
@@ -88,6 +89,14 @@ Full schema lives in `backend/src/db/schema.sql`, separated into four groups (au
 | `npm run db:reset` | Drop + migrate + seed |
 | `npm run db:migrate` | Apply schema only |
 | `npm run db:seed` | Seed demo data only |
+| `npm run demo:proxy` | Single-port proxy (frontend + API + socket) for an instant tunnel |
+
+## Getting a public demo link
+
+See **[DEPLOY.md](DEPLOY.md)**. Fastest paths:
+
+- **Real deploy** (stable link to submit): Postgres on Neon → backend on Render → frontend on Vercel. The backend migrates + seeds itself on an empty database, so log in with **demo@smartwatch.app / demo1234**.
+- **Instant localhost tunnel**: `npm run demo:proxy`, then `cloudflared tunnel --url http://localhost:8080` (or `npx localtunnel --port 8080`).
 
 ## Environment variables
 

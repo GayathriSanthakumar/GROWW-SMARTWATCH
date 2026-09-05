@@ -16,19 +16,40 @@ export async function evaluateAlerts() {
     `SELECT a.id, a.user_id, a.instrument_id, a.condition_json, a.trigger_count, a.last_triggered_at
      FROM alerts a WHERE a.is_active = true`,
   );
+  if (alerts.rows.length === 0) return 0;
+
+  // One batched query for every involved instrument instead of one per alert.
+  const instrumentIds = [...new Set(alerts.rows.map((a) => a.instrument_id).filter(Boolean))];
+  const ticks = await query<{ instrument_id: string; ltp: number; prev_close: number; volume: number; avg_volume_20d: number; symbol: string }>(
+    `SELECT pt.instrument_id, pt.ltp, pt.prev_close, pt.volume, pt.avg_volume_20d, i.symbol
+     FROM price_ticks pt JOIN instruments i ON i.id = pt.instrument_id
+     WHERE pt.instrument_id = ANY($1::uuid[])`,
+    [instrumentIds],
+  );
+  const tickMap = new Map(ticks.rows.map((t) => [t.instrument_id, t]));
+
+  // Indicators are only computed for conditions that actually need them, and
+  // only once per instrument (alerts on the same stock share the result).
+  const indicatorCache = new Map<string, Promise<IndicatorSet>>();
 
   let fired = 0;
   for (const alert of alerts.rows) {
-    const tick = await query<{ ltp: number; prev_close: number; volume: number; avg_volume_20d: number; symbol: string }>(
-      `SELECT pt.ltp, pt.prev_close, pt.volume, pt.avg_volume_20d, i.symbol
-       FROM price_ticks pt JOIN instruments i ON i.id = pt.instrument_id WHERE pt.instrument_id = $1`,
-      [alert.instrument_id],
-    );
-    if (!tick.rows[0]) continue;
-    const t = tick.rows[0];
+    const tick = tickMap.get(alert.instrument_id);
+    if (!tick) continue;
+    const t = tick;
     const cond = (alert.condition_json ?? {}) as Record<string, unknown>;
 
-    const ind = await computeIndicators(alert.instrument_id);
+    const needsIndicators =
+      cond.type === "price_cross_ema" || cond.type === "rsi_above" || cond.type === "rsi_below";
+    let ind: IndicatorSet | null = null;
+    if (needsIndicators) {
+      let p = indicatorCache.get(alert.instrument_id);
+      if (!p) {
+        p = computeIndicators(alert.instrument_id);
+        indicatorCache.set(alert.instrument_id, p);
+      }
+      ind = await p;
+    }
 
     const triggered = evaluate(cond, Number(t.ltp), Number(t.prev_close), Number(t.volume), Number(t.avg_volume_20d), ind);
 
@@ -70,7 +91,7 @@ async function computeIndicators(instrumentId: string): Promise<IndicatorSet> {
   };
 }
 
-function evaluate(cond: Record<string, unknown>, ltp: number, prevClose: number, volume: number, avgVolume: number, ind: IndicatorSet): boolean {
+function evaluate(cond: Record<string, unknown>, ltp: number, prevClose: number, volume: number, avgVolume: number, ind: IndicatorSet | null): boolean {
   const type = cond.type;
   if (type === "price_above") return ltp >= Number(cond.price);
   if (type === "price_below") return ltp <= Number(cond.price);
@@ -82,11 +103,12 @@ function evaluate(cond: Record<string, unknown>, ltp: number, prevClose: number,
   }
   if (type === "volume_spike") return avgVolume > 0 && volume / avgVolume >= Number(cond.ratio || 1.5);
   if (type === "price_cross_ema") {
+    if (!ind) return false;
     const period = (cond.period === 20 ? 20 : 50) as 20 | 50;
     return cond.direction === "below" ? ind.crossedBelow(period) : ind.crossedAbove(period);
   }
-  if (type === "rsi_above") return ind.rsi14 != null && ind.rsi14 >= Number(cond.value);
-  if (type === "rsi_below") return ind.rsi14 != null && ind.rsi14 <= Number(cond.value);
+  if (type === "rsi_above") return !!ind && ind.rsi14 != null && ind.rsi14 >= Number(cond.value);
+  if (type === "rsi_below") return !!ind && ind.rsi14 != null && ind.rsi14 <= Number(cond.value);
   return false;
 }
 

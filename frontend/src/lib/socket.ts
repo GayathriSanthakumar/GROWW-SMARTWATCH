@@ -1,6 +1,21 @@
 import { io, type Socket } from "socket.io-client";
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000";
+const isLoopbackUrl = (u: string) => /localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]/.test(u);
+
+function resolveWsBase(): string {
+  const explicit = (process.env.NEXT_PUBLIC_WS_URL || "").trim();
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const pageIsLocal = host === "" || host === "localhost" || host === "127.0.0.1";
+  if (explicit) {
+    // Same rule as api.ts: never send a remote visitor's browser to their own
+    // localhost; use the tunnel/proxy origin instead.
+    if (!pageIsLocal && isLoopbackUrl(explicit)) return window.location.origin;
+    return explicit;
+  }
+  return pageIsLocal ? "http://localhost:4000" : window.location.origin;
+}
+
+const WS_BASE = resolveWsBase();
 
 let socket: Socket | null = null;
 

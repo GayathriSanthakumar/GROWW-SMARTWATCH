@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getSocket } from "@/lib/socket";
+import { api } from "@/lib/api";
+import { useMarket } from "@/store/market";
+import { useLiveWatchlist } from "@/context/MarketContext";
+import { changeColorClass } from "@/lib/liveMarket";
 import { formatINR, formatPercent, formatCompact } from "@/lib/format";
-import type { WatchlistItem, Watchlist } from "@/lib/types";
+import type { WatchlistItem, Watchlist, Candle } from "@/lib/types";
+import { type TrendDir } from "@/lib/trend";
+import { isPriceVerificationPending } from "@/lib/verification";
 import { Sparkline } from "./Sparkline";
 import { RangeSlider52w } from "./RangeSlider52w";
 import { ScorePill } from "./ScorePill";
@@ -14,6 +19,7 @@ type SortKey = "symbol" | "ltp" | "changePct" | "volume" | "opportunity" | "risk
 export function WatchlistTable({
   items,
   watchlists,
+  activeWatchlistId,
   onRowClick,
   onRemove,
   onMove,
@@ -22,44 +28,130 @@ export function WatchlistTable({
 }: {
   items: WatchlistItem[];
   watchlists: Watchlist[];
+  activeWatchlistId: string;
   onRowClick: (id: string) => void;
   onRemove: (id: string) => void;
   onMove: (instrumentId: string, targetWatchlistId: string) => void;
   onPin: (id: string, pinned: boolean) => void;
   onEditNotes: (id: string) => void;
 }) {
-  const [live, setLive] = useState<Record<string, { ltp: number; changePct: number }>>({});
-  const [flash, setFlash] = useState<Record<string, "up" | "down">>({});
+  const setQuotes = useMarket((s) => s.setQuotes);
+  const liveRows = useLiveWatchlist(items);
+  const quotes = useMemo(() => {
+    const m: Record<string, { ltp: number; prevClose: number; changeAbs: number; changePct: number; volume: number }> = {};
+    for (const l of liveRows) m[l.id] = { ltp: l.tick.ltp, prevClose: l.tick.prevClose, changeAbs: l.tick.dayChange, changePct: l.tick.dayChangePercent, volume: l.tick.volume };
+    return m;
+  }, [liveRows]);
+  const colorByRow = useMemo(() => {
+    const m: Record<string, "up" | "down" | "neutral"> = {};
+    for (const l of liveRows) m[l.id] = l.color;
+    return m;
+  }, [liveRows]);
+
+  // Publish the DB snapshot for every row into the SINGLE quote store. Any
+  // server fetch (watchlist load, detail open, screener, portfolio) overwrites
+  // the shared cache with the server's value, so a stale live overlay can never
+  // outlive the data the server currently owns.
+  useEffect(() => {
+    if (!items.length) return;
+    const map: Record<string, Partial<{ ltp: number; prevClose: number; changeAbs: number; changePct: number; volume: number }>> = {};
+    for (const it of items) {
+      map[it.id] = {
+        ltp: Number(it.ltp),
+        prevClose: Number(it.prevClose),
+        changeAbs: Number(it.change),
+        changePct: Number(it.changePct),
+        volume: Number(it.volume),
+      };
+    }
+    setQuotes(map);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
   const [sortKey, setSortKey] = useState<SortKey>("symbol");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [colPicker, setColPicker] = useState(false);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [trendCloses, setTrendCloses] = useState<Record<string, number[]>>({});
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendError, setTrendError] = useState(false);
 
+  // Fetch REAL intraday candle closes (same session window as the 1D % change)
+  // for all visible rows in ONE batched request. The trend line is anchored to
+  // the actual previous close so its direction & colour always agree with the
+  // displayed 1D change — never a different (e.g. multi-day) window.
+  const trendKey = useMemo(() => items.map((i) => i.id).sort().join(","), [items]);
   useEffect(() => {
-    const socket = getSocket();
-    const onTicks = (updates: Record<string, { ltp: number; changePct: number }>) => {
-      setLive((prev) => ({ ...prev, ...updates }));
-      const f: Record<string, "up" | "down"> = {};
-      for (const [id, u] of Object.entries(updates)) {
-        f[id] = u.changePct >= 0 ? "up" : "down";
-      }
-      setFlash(f);
-      const t = setTimeout(() => setFlash({}), 900);
-      return () => clearTimeout(t);
-    };
-    socket.on("ticks", onTicks);
+    if (!items.length) {
+      setTrendCloses({});
+      setTrendLoading(false);
+      setTrendError(false);
+      return;
+    }
+    let alive = true;
+    setTrendLoading(true);
+    setTrendError(false);
+    api
+      .post<{ candles: Record<string, Candle[]> }>("/api/instruments/candles/batch", {
+        instrumentIds: items.map((i) => i.id),
+        interval: "5m",
+        limit: 90,
+      })
+      .then((d) => {
+        if (!alive) return;
+        const map: Record<string, number[]> = {};
+        for (const [id, arr] of Object.entries(d.candles)) {
+          if (Array.isArray(arr) && arr.length >= 2) map[id] = arr.map((c) => Number(c.close));
+        }
+        setTrendCloses(map);
+      })
+      .catch(() => alive && setTrendError(true))
+      .finally(() => alive && setTrendLoading(false));
     return () => {
-      socket.off("ticks", onTicks);
+      alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trendKey]);
+
+  // Persist the user's table preferences (hidden columns + sort) locally so a
+  // refresh restores their view. Server-side state (lists, memory) is shared
+  // across devices regardless.
+  useEffect(() => {
+    try {
+      const h = localStorage.getItem("smartwatch.cols");
+      if (h) setHidden(new Set(JSON.parse(h) as string[]));
+      const s = localStorage.getItem("smartwatch.sort");
+      if (s) {
+        const parsed = JSON.parse(s) as { key?: SortKey; dir?: 1 | -1 };
+        if (parsed.key) setSortKey(parsed.key);
+        if (parsed.dir) setSortDir(parsed.dir);
+      }
+    } catch {
+      /* ignore malformed prefs */
+    }
   }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("smartwatch.cols", JSON.stringify([...hidden]));
+    } catch {
+      /* noop */
+    }
+  }, [hidden]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("smartwatch.sort", JSON.stringify({ key: sortKey, dir: sortDir }));
+    } catch {
+      /* noop */
+    }
+  }, [sortKey, sortDir]);
 
   const rows = useMemo(() => {
     const enriched = items.map((it) => {
-      const l = live[it.id];
+      const l = quotes[it.id];
       const ltp = l?.ltp ?? it.ltp;
       const changePct = l?.changePct ?? it.changePct;
-      return { ...it, ltp, changePct };
+      const volume = l?.volume ?? it.volume;
+      return { ...it, ltp, changePct, volume };
     });
     enriched.sort((a, b) => {
       let av: number | string, bv: number | string;
@@ -84,7 +176,7 @@ export function WatchlistTable({
       return 0;
     });
     return enriched;
-  }, [items, live, sortKey, sortDir]);
+  }, [items, quotes, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 1 ? -1 : 1));
@@ -96,9 +188,9 @@ export function WatchlistTable({
 
   const cols: { key: string; label: string; cell: (r: WatchlistItem) => React.ReactNode; sortable?: SortKey; align?: string }[] = [
     { key: "company", label: "Company", sortable: "symbol", cell: (r) => <CompanyCell r={r} /> },
-    { key: "trend", label: "Trend", cell: (r) => <Sparkline points={sparkFrom(r)} /> },
-    { key: "ltp", label: "LTP", sortable: "ltp", cell: (r) => <LtpCell r={r} flash={flash[r.id]} />, align: "right" },
-    { key: "change", label: "1D %", sortable: "changePct", cell: (r) => <span className={`tabular-nums ${r.changePct >= 0 ? "text-up" : "text-down"}`}>{formatPercent(r.changePct)}</span>, align: "right" },
+    { key: "trend", label: "Trend", cell: (r) => <TrendCell symbol={r.symbol} companyName={r.companyName} closes={trendCloses[r.id]} loading={trendLoading} error={trendError} ltp={r.ltp} prevClose={r.prevClose} changePct={r.changePct} /> },
+    { key: "ltp", label: "LTP", sortable: "ltp", cell: (r) => <LtpCell r={r} />, align: "right" },
+    { key: "change", label: "1D %", sortable: "changePct", cell: (r) => <span className={`tabular-nums ${changeColorClass(colorByRow[r.id] ?? (r.changePct >= 0 ? "up" : "down"))}`}>{formatPercent(r.changePct)}</span>, align: "right" },
     { key: "volume", label: "1D Vol", sortable: "volume", cell: (r) => <span className="tabular-nums">{formatCompact(r.volume)}</span>, align: "right" },
     { key: "range", label: "52W Range", cell: (r) => <RangeSlider52w low={r.week52Low} high={r.week52High} current={r.ltp} /> },
     { key: "opp", label: "Opp", sortable: "opportunity", cell: (r) => <ScorePill label="" value={r.scores.opportunity} /> },
@@ -164,7 +256,7 @@ export function WatchlistTable({
                       {r.isPinned ? "Unpin" : "⭐ Pin"}
                     </button>
                     <div className="px-3 py-1.5 text-xs text-gray-400">Move to…</div>
-                    {watchlists.filter((w) => w.id !== r.id).map((w) => (
+                    {watchlists.filter((w) => w.id !== activeWatchlistId).map((w) => (
                       <button key={w.id} className="block w-full text-left px-6 py-1.5 hover:bg-surface-muted" onClick={() => { onMove(r.id, w.id); setMenuFor(null); }}>
                         {w.emoji} {w.name}
                       </button>
@@ -196,6 +288,10 @@ function CompanyCell({ r }: { r: WatchlistItem }) {
           {r.tags?.slice(0, 2).map((t) => (
             <span key={t} className="pill bg-sky-100 text-sky-700">{t}</span>
           ))}
+          {r.dataStatus && r.dataStatus !== "LIVE" && <StatusChip status={r.dataStatus} />}
+          {isPriceVerificationPending(r.symbol) && (
+            <span className="pill bg-amber-50 text-amber-600" title="No external source could verify this stored quote at submission time">verif. pending</span>
+          )}
           {r.cagr != null && (
             <span className={`text-[10px] ${r.cagr >= 0 ? "text-up" : "text-down"}`}>CAGR {r.cagr >= 0 ? "+" : ""}{r.cagr.toFixed(1)}%</span>
           )}
@@ -203,6 +299,19 @@ function CompanyCell({ r }: { r: WatchlistItem }) {
       </div>
     </div>
   );
+}
+
+function StatusChip({ status }: { status: string }) {
+  // Per-row chips are for per-stock ANOMALIES only. Global feed freshness
+  // (LIVE / DELAYED / DEMO) is owned by the top status bar — showing DELAYED on
+  // every row duplicates the same state with a second label.
+  const map: Record<string, string> = {
+    STALE: "bg-red-100 text-down",
+    CONFLICT: "bg-purple-100 text-purple-700",
+  };
+  const cls = map[status.toUpperCase()];
+  if (!cls) return null;
+  return <span className={`pill ${cls}`}>{status.toUpperCase()}</span>;
 }
 
 function LtpCell({ r, flash }: { r: WatchlistItem; flash?: "up" | "down" }) {
@@ -213,8 +322,60 @@ function LtpCell({ r, flash }: { r: WatchlistItem; flash?: "up" | "down" }) {
   );
 }
 
-function sparkFrom(r: WatchlistItem): number[] {
-  const up = r.ltp >= r.dayOpen;
-  if (up) return [r.dayOpen, (r.dayOpen + r.dayLow) / 2, r.dayLow, (r.dayLow + r.ltp) / 2, r.ltp];
-  return [r.dayOpen, (r.dayOpen + r.dayHigh) / 2, r.dayHigh, (r.dayHigh + r.ltp) / 2, r.ltp];
+function TrendCell({
+  symbol,
+  companyName,
+  closes,
+  loading,
+  error,
+  ltp,
+  prevClose,
+  changePct,
+}: {
+  symbol: string;
+  companyName: string;
+  closes: number[] | undefined;
+  loading: boolean;
+  error: boolean;
+  ltp: number;
+  prevClose: number;
+  changePct: number;
+}) {
+  // Direction & colour come from the SAME numbers as the displayed 1D %:
+  // current price vs actual previous close. The rendered series is anchored at
+  // the previous close so the visible net move matches that sign too.
+  const eps = 1e-9;
+  const dir: TrendDir = changePct > eps ? "up" : changePct < -eps ? "down" : "flat";
+  const dirWord = dir === "up" ? "upward" : dir === "down" ? "downward" : "flat";
+  const label = `${companyName} (${symbol}) today's trend: ${dirWord} (${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}% from previous close ₹${prevClose.toFixed(2)}).`;
+
+  const points: number[] | null = useMemo(() => {
+    if (closes && closes.length >= 2) {
+      const series = [...closes];
+      series[series.length - 1] = ltp; // live last price keeps endpoint == 1D figure
+      // Anchor the previous close ONLY when it isn't a big overnight gap — a
+      // distant anchor becomes a giant spike that flattens the day's real
+      // micro-movement. (Small gaps keep the line starting at yesterday's close,
+      // so direction and the 1D% stay visually consistent.)
+      const first = series[0];
+      if (prevClose > 0 && first > 0 && Math.abs(prevClose - first) / first <= 0.008) series.unshift(prevClose);
+      return series;
+    }
+    if (prevClose > 0 && ltp > 0) return [prevClose, ltp];
+    return null;
+  }, [closes, ltp, prevClose]);
+
+  return (
+    <div className="w-24 sm:w-28" title={label}>
+      {loading && closes === undefined ? (
+        <div className="h-[30px] w-full rounded bg-surface-muted animate-pulse" aria-label="Loading trend" />
+      ) : error ? (
+        <span className="text-[10px] text-gray-400">Unavailable</span>
+      ) : points ? (
+        <Sparkline points={points} baseline={prevClose} direction={dir} label={label} />
+      ) : (
+        <span className="text-[10px] text-gray-400" title="Not enough historical data">Not enough data</span>
+      )}
+    </div>
+  );
 }

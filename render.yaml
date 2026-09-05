@@ -1,0 +1,37 @@
+# Render Blueprint — one web service hosts the built frontend (static export),
+# the Express API and Socket.IO from a SINGLE origin. Only a database is
+# external. Deploy: push this repo to GitHub, then in Render:
+#   New → Blueprint → select repo (or New Web Service + paste envs below).
+#
+# Required env: DATABASE_URL (Neon pooled Postgres URL).
+# First boot auto-migrates + seeds the demo account when the DB is empty.
+
+services:
+  - type: web
+    name: smartwatch
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SEED_DEMO_ACCOUNT
+        value: "true"
+      - key: DEMO_MODE_DEFAULT
+        value: "true"
+      - key: UNIVERSE_LIMIT
+        value: "200"
+      - key: DATABASE_URL
+        sync: false # set to your Neon pooled URL in the dashboard
+      - key: FRONTEND_URL
+        sync: false # set to https://<your-service>.onrender.com
+      - key: APP_BASE_URL
+        sync: false # set to https://<your-service>.onrender.com
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
