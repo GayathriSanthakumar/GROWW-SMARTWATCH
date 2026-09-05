@@ -2,114 +2,132 @@
 
 **Don't watch everything. Know what changed.**
 
-A full-stack stock watchlist intelligence app: Groww-style watchlist & order UI layered with Warifin-style AI intelligence. Every user gets their own private, live-updating watchlists, portfolio, alerts and "personal market memory" — isolated at the database level.
+A full-stack Indian-equity **smart market watchlist** built end-to-end (React/Next.js frontend + Node/Express/Postgres backend). It's a Groww-style watchlist layered with "personal market memory" and data-grounded AI — so instead of a wall of flickering numbers, you get: *what meaningfully changed since you last looked, whether the app's own analysis is still right, and why.*
 
-> Educational research tool — not financial advice. SMARTWATCH does not execute trades or guarantee returns.
+> ⚠️ Educational research tool — **not financial advice**. SMARTWATCH does not execute trades or guarantee returns. It does not scrape or republish Groww data.
 
-## Stack
+---
 
-- **Backend** — Node.js + Express + TypeScript, PostgreSQL (with Row-Level Security), Redis (optional, in-memory fallback), Socket.IO for live updates, JWT auth (access + rotating refresh tokens), bcrypt.
-- **Frontend** — Next.js 14 (App Router) + React + TypeScript, Tailwind CSS, Zustand, Recharts, Socket.IO client.
-- **Infra** — `docker-compose.yml` for Postgres + Redis (optional — works against a local Postgres too).
+## What it does
 
-## Quick start
+- **Watchlist** — multiple named lists (create/rename/delete/reorder), search-to-add, notes/tags, pin, move between lists. Persists per user server-side.
+- **Latest market info** — live index strip and ticking quotes while the market is open (TradingView-sourced), last-close values when closed — **honestly labelled** (`LIVE` only with a licensed feed; otherwise `DELAYED` / last close). Per-stock charts across 1D→All ranges, real candle-closes trend sparklines, fundamentals, AI verdicts and Opportunity/Risk/Alpha/Smart-$ scores.
+- **Return later → know what changed** — every view is snapshotted. On return, the **"Since you were last here"** hub lists what meaningfully changed and one click baselines you for next time.
+- **AI Analyst** — a company-aware assistant that answers conceptual, company-specific and screening questions, keeps multi-turn context, and **validates the app's own analysis** (`Verified` / `Needs Correction` / `Insufficient Data`) against the latest data. Fully deterministic — works with zero API keys, never fabricates figures.
+- **Screener AI** — natural-language queries ("stocks with PE below 20 and ROE above 15") become real, live filters with results.
+- **Portfolio** — log paper holdings under your own portfolios (goals), with per-portfolio views, live P&L and a clearly-labelled simulated Buy/Sell panel.
 
-### 1. Database
+**Core product decisions** (why it isn't "the obvious watchlist"):
+- *Meaningful change* = explicit, tunable thresholds: price move ≥2% vs your last-seen baseline, volume ≥1.5×, or attention-score shift ≥15 pts.
+- *What's surfaced* = changes grouped with plain-English reasons + the data behind each metric; data we don't have (analyst targets, promoter/insider records…) is **refused**, never invented.
+- *State persists* server-side in Postgres per user (JWT + Row-Level Security), so it's identical across sessions/devices.
+- *Stale/conflicting data* is labelled, not hidden: auto STALE, NSE-vs-BSE CONFLICT, and a truthful delayed/last-close badge when the market is closed.
+- *Scaling*: batched multi-row feed writes, one SQL pass per user for change detection, and per-listener socket fan-out; provider interface ready for a licensed broker feed.
 
-Either use Docker:
+---
 
-```bash
-docker compose up -d
-```
+## Tech stack
 
-…or use an existing local PostgreSQL (Homebrew, etc.) and create the database:
+| Layer | Tech |
+|---|---|
+| Frontend | Next.js 14 (App Router), React, TypeScript, Tailwind CSS, Zustand, Socket.IO client |
+| Backend | Node.js, Express, TypeScript, Socket.IO, PostgreSQL (Row-Level Security), Redis-optional (in-memory fallback) |
+| Market data | TradingView India scanner (when reachable) with a clearly-labelled simulator fallback |
 
-```bash
-createdb smartwatch        # via psql; role is your OS user by default
-```
+---
 
-Then copy env files:
+## Quick start (local)
 
-```bash
-cp .env.example .env                       # backend (see note below)
-cp frontend/.env.local.example frontend/.env.local   # if you changed ports
-```
-
-`DATABASE_URL` defaults to `postgres://gayathris@localhost:5432/smartwatch`. Edit it to match your local role. For Docker, use `postgres://smartwatch:smartwatch@localhost:5432/smartwatch`.
-
-### 2. Install
-
-```bash
-npm install           # at the repo root (installs backend + frontend + root tools)
-```
-
-### 3. Migrate + seed
+**Prerequisites:** Node.js 18+ and PostgreSQL 14+ (or Docker).
 
 ```bash
-npm run db:reset      # drop, migrate, and seed demo data (safe to re-run)
+# 1) install
+npm install
+
+# 2) database
+createdb smartwatch                # adjust to your local role
+cp .env.example .env                # backend config (defaults work on localhost)
+cp frontend/.env.local.example frontend/.env.local
+
+# 3) schema + demo data
+npm run db:reset                    # migrate + seed (~34 companies + full demo)
+
+# 4) run both servers
+npm run dev
 ```
 
-Seeds a demo account — **demo@smartwatch.app / demo1234** — plus ~34 Indian stocks/ETFs, 5 indices, 90 days of candles, fundamentals, scores, watchlists, a portfolio, alerts and last-seen baselines.
+Open **http://localhost:3000** and click **"Try Demo Mode"** — no account or API keys needed. Or log in with the seeded demo account:
 
-### 4. Run
-
-```bash
-npm run dev           # backend :4000 + frontend :3000 concurrently
+```
+Email:    demo@smartwatch.app
+Password: demo1234
 ```
 
-Open http://localhost:3000 → click **"Try Demo Mode"** or log in with the demo credentials. Sign up to create your own account.
+> No keys required. If TradingView is unreachable the app runs a clearly-labelled simulator (`DELAYED`/`DEMO`). To see change-detection any time, open **Demo Control** (avatar menu) and fire a scenario like "Sudden price spike".
 
-## What's implemented (spec mapping)
+### Environment variables (all optional for local dev)
 
-- **Tier 0 — Auth & onboarding**: email/password (bcrypt, rate-limited), Google OAuth (server-verified; runs as a labelled stub until `GOOGLE_CLIENT_ID` is set), JWT access + rotating refresh tokens, session management, goal-picker onboarding, knowledge-level quiz, demo mode.
-- **Tier 1/2 — Personal market memory & change detection**: `user_instrument_memory` baseline per (user, instrument); a background worker detects meaningful changes since last review — price moves ≥ 2%, volume ≥ 1.5×, attention shifts ≥ 15 pts — and emits `change_events` + notifications in a single batched SQL pass. The watchlist home has a **"Since you were last here"** hub that summarises what changed while you were away and baselines everything in one click (`/api/memory/summary`, `/api/memory/catchup`).
-- **Tier 3/4 — Scoring & watchlists**: deterministic Opportunity / Risk / Attention / Financial Strength scores; multi-watchlist CRUD.
-- **Tier 5/6 — Market intelligence**: index ticker, market breadth, sector performance, institutional holdings, news.
-- **Tier 7 — Screener**: 30+ filterable params + presets (Alpha Leaders, Emerging Winners, Safe Bets, Sharia, etc.) + save/restore screens.
-- **Tier 8 — AI Analyst**: deterministic, data-grounded Q&A (why-changed, verdict, scores, summary, compare) — no API key needed. Optional `OPENAI_API_KEY` hook point.
-- **Tier 9/10 — Education & portfolio**: lessons, simulated portfolio tracking (no brokerage), investment journal.
-- **Tier 11/12 — Alerts & live updates**: trigger-builder alerts, Socket.IO tick streams, live index strip. Prices stream live from **TradingView's public India scanner API** (~3s, NSE live + BSE every 30s), with a local simulator fallback when offline.
-- **Full market universe**: on boot, SMARTWATCH imports the top ~400 Indian companies (by market cap) from TradingView — search, screener, charts and AI all cover every major listed company, each with NSE + BSE quotes and candlestick history. Raise `UNIVERSE_LIMIT` to import more.
-- **Tier 13/14/15 — Reliability & demo mode**: data-status badges (LIVE/DELAYED/STALE/CONFLICT), a Demo Control Center with seeded scenarios, Redis read-through cache with in-memory fallback. Staleness and NSE-vs-BSE conflicts are **auto-detected** while the market is open (rows not refreshed in 3 min → STALE; divergent exchanges → CONFLICT), and `/api/market/status` reports the live feed source + freshness instead of a hardcoded mode.
-- **Scaling (workers)**: the 3s market feed and 30s change-detection/alert loops are batched — the ~800-instrument TradingView sync now writes with a handful of multi-row `unnest()` statements (not ~800 sequential UPDATEs), per-instrument Socket.IO emits only go to rooms with subscribers, alert evaluation uses one batched tick query and only computes indicators when a condition needs them, and change detection is a single SQL statement per user. Hot-path indexes were added for notifications/alerts/memory/conversations/ticks.
-- **Tier 16 — Groww-style watchlist UI**: live index strip, multi-tab watchlists (drag reorder, rename/delete, create), sparkline trend column, 52-week range slider, slide-over stock detail panel with "Add to Portfolio" / "Set Alert" tabs, column picker, search/add-stocks modal.
-- **Tier 17 — Warifin-style intelligence**: AI verdict badges (BUY-lean/HOLD/WATCH/AVOID-lean), AI company summary, Alpha Growth Score, Smart Money Score, ETF intelligence, Sharia screening.
-- **Email news digest**: subscribe to a daily/weekly email of watchlist news + top movers. Sends via SMTP when `SMTP_HOST` is set, otherwise shows a preview (works fully offline).
+- `DATABASE_URL` — Postgres connection string (defaults to `postgres://<user>@localhost:5432/smartwatch`)
+- `REDIS_URL` — optional; falls back to in-memory cache
+- `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — change in production
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — blank ⇒ Google runs as a documented stub
+- `OPENAI_API_KEY` — blank ⇒ the AI Analyst stays fully deterministic/offline
+- `SMTP_*` — blank ⇒ email digest shows a preview instead of sending
+- `LIVE_FEED_LICENSED=true` — **only** with an authorized broker real-time feed (Kite/Upstox/Angel) before the UI may show `LIVE`
+- `COOKIE_SAMESITE=none` — set when the frontend and API are on different domains (e.g. Vercel + Render)
+- Dev/test only: `SIMULATE_MARKET_OPEN`, `FORCE_SIMULATOR`
 
-## Database schema
-
-Full schema lives in `backend/src/db/schema.sql`, separated into four groups (auth, reference data, live/time-series, per-user) with Row-Level Security on every per-user table. The app sets `app.current_user_id` per request; RLS enforces isolation automatically whenever the app connects as a non-superuser role (local dev as superuser bypasses RLS, but all queries still filter by `user_id`).
+---
 
 ## Scripts
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Run backend + frontend together |
+| `npm run dev` | Backend `:4000` + frontend `:3000` together |
 | `npm run build` | Type-check & build both |
-| `npm run db:reset` | Drop + migrate + seed |
-| `npm run db:migrate` | Apply schema only |
-| `npm run db:seed` | Seed demo data only |
+| `npm start` | Run the production server (backend serves the built frontend, one origin) |
+| `npm run db:reset` / `db:migrate` / `db:seed` | Drop+migrate+seed / migrate / seed |
 | `npm run demo:proxy` | Single-port proxy (frontend + API + socket) for an instant tunnel |
 
-## Getting a public demo link
+### Verification scripts (run against a live backend)
 
-See **[DEPLOY.md](DEPLOY.md)**. Fastest paths:
+```bash
+node backend/scripts/verify-external.mjs     # cross-check every watchlist ticker vs real NSE close
+node backend/scripts/trend-consistency.mjs   # assert sparkline direction == displayed 1D %
+node backend/scripts/evalAi.mjs              # AI Analyst eval (37 questions across 8 categories)
+node backend/scripts/reconcile-watchlist.ts  # restore stored closes from the market close
+```
 
-- **Real deploy** (stable link to submit): Postgres on Neon → backend on Render → frontend on Vercel. The backend migrates + seeds itself on an empty database, so log in with **demo@smartwatch.app / demo1234**.
-- **Instant localhost tunnel**: `npm run demo:proxy`, then `cloudflared tunnel --url http://localhost:8080` (or `npx localtunnel --port 8080`).
+---
 
-## Environment variables
+## Deployment & public demo link
 
-See `.env.example` (backend). The important ones:
+A permanent live link needs a 24/7 host (this repo ships ready for a single Render service or a Vercel-frontend + Render-API split).
 
-- `DATABASE_URL` — Postgres connection string
-- `REDIS_URL` — optional; app falls back to in-memory cache if unreachable
-- `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — change in production
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — leave blank for the stub flow
-- `OPENAI_API_KEY` — optional; blank keeps the analyst fully deterministic
+- **[DEPLOY.md](DEPLOY.md)** — step-by-step for Render + Neon, and the instant-tunnel option.
+- `render.yaml` — one-service blueprint (static frontend + API + Socket.IO, single origin, auto-seed).
+- The frontend is a Next.js **static export** (`frontend/out`); the backend can serve it or you can host it on Vercel and point `NEXT_PUBLIC_API_URL`/`NEXT_PUBLIC_WS_URL` at the backend.
 
-## Google OAuth (production)
+---
 
-1. Create OAuth credentials in Google Cloud Console (Web client).
-2. Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in the backend `.env`.
-3. Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in `frontend/.env.local` and load the Google Identity Services script + official button widget (see `components/auth/GoogleButton.tsx`). The backend verifies the ID token against Google's tokeninfo/JWKS endpoint — never trust the frontend profile.
+## Repository structure
+
+```
+backend/   Express API, Postgres schema (RLS), Socket.IO feed, change-detection,
+           insights/validation services, AI Analyst engine, scripts
+frontend/  Next.js app, unified market store, MarketDataProvider/useStockData,
+           watchlist UI, charts, AI Analyst page, error boundaries
+scripts/   dev proxy + source packager for the hackathon upload
+DEPLOY.md  deployment runbooks
+SUBMISSION.md  hackathon submission kit (title/desc/video script/limitations)
+```
+
+## Known limitations (honest)
+
+- Market data is last-close/delayed unless a **licensed** real-time feed is configured (`LIVE_FEED_LICENSED` + broker key). The UI never claims LIVE without one.
+- A few tickers (e.g. TATAMOTORS) can't currently be externally verified by the free sources used; they show a "verification pending" flag rather than false confidence.
+- Long-history candles are application-derived until a broker historical API is connected.
+
+## Disclaimer
+
+Educational research tool — not investment advice. SMARTWATCH does not execute trades or guarantee returns.
