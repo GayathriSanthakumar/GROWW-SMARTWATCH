@@ -2,7 +2,7 @@
 
 import { formatINR } from "@/lib/format";
 
-// Groww-style 52-week range track: L —●— H with a dot marking current price.
+// 52-week range track: L —●— H with a dot marking current price.
 export function RangeSlider52w({ low, high, current }: { low: number; high: number; current: number }) {
   const pct = high > low ? Math.max(0, Math.min(100, ((current - low) / (high - low)) * 100)) : 50;
   const zone = pct < 30 ? "bg-up" : pct > 75 ? "bg-down" : "bg-brand";

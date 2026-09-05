@@ -104,7 +104,7 @@ export default function LandingPage() {
             <span className="text-brand">Know what changed.</span>
           </h1>
           <p className="mt-4 text-gray-500 text-lg">
-            A stock watchlist with personal market memory, deterministic opportunity &amp; risk scoring, and AI verdicts — built Groww-style, powered by Warifin-style intelligence.
+            A stock watchlist with personal market memory, deterministic opportunity &amp; risk scoring, and AI verdicts — built for fast, honest decision-making.
           </p>
           <ul className="mt-6 space-y-2 text-sm text-gray-600">
             <li>• Your own live-updating watchlists, isolated per user</li>

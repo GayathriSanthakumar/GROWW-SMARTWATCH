@@ -15,7 +15,7 @@ import { GoToModal } from "./GoToModal";
 
 export type CandleInterval = "1m" | "2m" | "3m" | "5m" | "10m" | "15m" | "30m" | "1h" | "4h" | "1d" | "1w" | "1M";
 
-// Groww-style period ranges. Each maps to the app's real candle interval +
+// Period ranges. Each maps to the app's real candle interval +
 // fetch limit so 1D→intraday, weekly/monthly/years→daily or weekly candles.
 const RANGES: { label: string; value: CandleInterval; limit: number }[] = [
   { label: "1D", value: "5m", limit: 90 },

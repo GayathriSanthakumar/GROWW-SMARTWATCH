@@ -2,7 +2,7 @@
 // useStockData — one clean, reactive hook for any grid row / detail header.
 //
 // Reads ONLY from the unified quote store (the single source of truth) and
-// exposes Groww-style fields: ltp, dayChange, dayChangePercent, volume. If the
+// exposes market fields: ltp, dayChange, dayChangePercent, volume. If the
 // store has no live value it reflects the server snapshot passed in via
 // `fallback`; if neither exists the row reports `status: "unavailable"` — it is
 // never silently populated with a fabricated number.

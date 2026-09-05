@@ -2,9 +2,9 @@
 
 **Don't watch everything. Know what changed.**
 
-A full-stack Indian-equity **smart market watchlist** built end-to-end (React/Next.js frontend + Node/Express/Postgres backend). It's a Groww-style watchlist layered with "personal market memory" and data-grounded AI — so instead of a wall of flickering numbers, you get: *what meaningfully changed since you last looked, whether the app's own analysis is still right, and why.*
+A full-stack Indian-equity **smart market watchlist** built end-to-end (React/Next.js frontend + Node/Express/Postgres backend). It layers "personal market memory" and data-grounded AI onto a watchlist — so instead of a wall of flickering numbers, you get: *what meaningfully changed since you last looked, whether the app's own analysis is still right, and why.*
 
-> ⚠️ Educational research tool — **not financial advice**. SMARTWATCH does not execute trades or guarantee returns. It does not scrape or republish Groww data.
+> ⚠️ Educational research tool — **not financial advice**. SMARTWATCH does not execute trades or guarantee returns. It uses public market-data sources and clearly-labelled simulation.
 
 ---
 

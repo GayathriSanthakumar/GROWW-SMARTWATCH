@@ -1,4 +1,4 @@
-// Unified live-market contract + Groww-style computational change logic.
+// Unified live-market contract + computational change logic.
 // The UI never calculates; metrics are derived here from real inputs only.
 
 export type Direction = "up" | "down" | "flat";
