@@ -5,11 +5,10 @@ verified with a real headless browser against the live build (zero console error
 
 ---
 
-## 1. Title (pick one)
+## 1. Title 
 
-1. **SMARTWATCH — Know What Changed** *(recommended: short, echoes the tagline)*
 2. **SMARTWATCH: A Watchlist That Tells You What Matters, Not Just What Moved**
-3. **SMARTWATCH — Personal Market Memory for Indian Stocks**
+
 
 Why it's not "just another watchlist": it tells you *what changed while you were
 away*, *whether the app's own analysis is still correct*, and *why* — with AI-style
@@ -143,18 +142,7 @@ as your only link.
 
 ---
 
-## 7. Repository URL
 
-Repo: `https://github.com/GayathriSanthakumar/GROWW-SMARTWATCH`
-- Make sure it is **Public** (or shared with reviewers) before submitting.
-- No secrets are committed: only `.env.example` files are tracked; real `.env` files are
-  git-ignored. Build artifacts (`node_modules`, `dist`, `.next`, `frontend/out`) are
-  untracked.
-- Commit history is currently a single commit — ideally commit the work in a few logical
-  chunks (watchlist core → memory/what-changed → AI/validation → scaling/reliability →
-  submission kit) so reviewers see the build-up.
-
----
 
 ## 8. Source code upload (< 50 MB)
 
