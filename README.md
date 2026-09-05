@@ -36,34 +36,6 @@ A full-stack Indian-equity **smart market watchlist** built end-to-end (React/Ne
 
 ---
 
-## Quick start (local)
-
-**Prerequisites:** Node.js 18+ and PostgreSQL 14+ (or Docker).
-
-```bash
-# 1) install
-npm install
-
-# 2) database
-createdb smartwatch                # adjust to your local role
-cp .env.example .env                # backend config (defaults work on localhost)
-cp frontend/.env.local.example frontend/.env.local
-
-# 3) schema + demo data
-npm run db:reset                    # migrate + seed (~34 companies + full demo)
-
-# 4) run both servers
-npm run dev
-```
-
-Open **http://localhost:3000** and click **"Try Demo Mode"** — no account or API keys needed. Or log in with the seeded demo account:
-
-```
-Email:    demo@smartwatch.app
-Password: demo1234
-```
-
-> No keys required. If TradingView is unreachable the app runs a clearly-labelled simulator (`DELAYED`/`DEMO`). To see change-detection any time, open **Demo Control** (avatar menu) and fire a scenario like "Sudden price spike".
 
 ### Environment variables (all optional for local dev)
 
@@ -79,36 +51,27 @@ Password: demo1234
 
 ---
 
-## Scripts
-
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Backend `:4000` + frontend `:3000` together |
-| `npm run build` | Type-check & build both |
-| `npm start` | Run the production server (backend serves the built frontend, one origin) |
-| `npm run db:reset` / `db:migrate` / `db:seed` | Drop+migrate+seed / migrate / seed |
-| `npm run demo:proxy` | Single-port proxy (frontend + API + socket) for an instant tunnel |
-
-### Verification scripts (run against a live backend)
-
-```bash
-node backend/scripts/verify-external.mjs     # cross-check every watchlist ticker vs real NSE close
-node backend/scripts/trend-consistency.mjs   # assert sparkline direction == displayed 1D %
-node backend/scripts/evalAi.mjs              # AI Analyst eval (37 questions across 8 categories)
-node backend/scripts/reconcile-watchlist.ts  # restore stored closes from the market close
-```
-
----
-
 ## Deployment & public demo link
 
-A permanent live link needs a 24/7 host (this repo ships ready for a single Render service or a Vercel-frontend + Render-API split).
+# Instructions to Run
 
-- **[DEPLOY.md](DEPLOY.md)** — step-by-step for Render + Neon, and the instant-tunnel option.
-- `render.yaml` — one-service blueprint (static frontend + API + Socket.IO, single origin, auto-seed).
-- The frontend is a Next.js **static export** (`frontend/out`); the backend can serve it or you can host it on Vercel and point `NEXT_PUBLIC_API_URL`/`NEXT_PUBLIC_WS_URL` at the backend.
+##Instructions to Run
+-Live Demo
 
-### Run it (Vercel — recommended)
+-The project is fully deployed and can be tested directly using the live application:
+
+-Live Demo: https://groww-smartwatch-frontend.vercel.app/
+
+-Demo Account
+
+-click just exploring?Demo mode
+
+-Or create new account
+
+-The live application is connected to the deployed backend and database. No local setup or configuration is required to test the project.
+
+-Reviewers can simply open the live demo link, sign in using the demo credentials above, and explore the application.
+
 
 The app is deployed on **Vercel** — no install, no keys:
 
