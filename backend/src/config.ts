@@ -55,6 +55,11 @@ export const config = {
   // Optional licensed broker feed (leave blank → demo provider)
   kiteApiKey: process.env.KITE_API_KEY || "",
 
+  // Cookie SameSite. "strict" is safest when frontend & backend share a domain
+  // (tunnel/proxy). Set COOKIE_SAMESITE=none when the frontend (Vercel) and API
+  // (Render) are on DIFFERENT domains — requires HTTPS (production).
+  cookieSameSite: (process.env.COOKIE_SAMESITE || "strict") as "strict" | "lax" | "none",
+
   // A LIVE badge is only honest when a licensed real-time feed is configured.
   // Free/delayed sources (TradingView public scanner, Yahoo, sim) must label as
   // DELAYED/DEMO. Set LIVE_FEED_LICENSED=true ONLY with an authorized broker
