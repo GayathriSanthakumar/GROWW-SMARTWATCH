@@ -38,6 +38,7 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifs, setNotifs] = useState<NotificationItem[]>([]);
 
@@ -91,6 +92,9 @@ export function Navbar() {
   }
 
   function doLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setMenuOpen(false);
     // Navigate immediately — never block on the server revoke round-trip.
     void logout(); // clears auth state synchronously, then best-effort server revoke
     // Tear down this session's live connections & market state.
@@ -188,7 +192,7 @@ export function Navbar() {
                 <Link href="/settings" className="block px-4 py-2 text-sm hover:bg-surface-muted">Settings</Link>
                 <Link href="/alerts" className="block px-4 py-2 text-sm hover:bg-surface-muted">Alerts</Link>
                 {user?.isDemo && <Link href="/demo" className="block px-4 py-2 text-sm hover:bg-surface-muted">Demo Control</Link>}
-                <button onClick={doLogout} className="block w-full text-left px-4 py-2 text-sm text-down hover:bg-surface-muted">Log out</button>
+                <button onClick={doLogout} disabled={loggingOut} className="block w-full text-left px-4 py-2 text-sm text-down hover:bg-surface-muted disabled:opacity-50">{loggingOut ? "Logging out…" : "Log out"}</button>
               </div>
             )}
           </div>
