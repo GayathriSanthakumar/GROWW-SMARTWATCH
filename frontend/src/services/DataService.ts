@@ -68,8 +68,7 @@ class DataService {
 
   start(): void {
     if (this.started) return;
-    this.started = true;
-    const setQuotes = useMarket.getState().setQuotes;
+    this.started = true;    const setQuotes = useMarket.getState().setQuotes;
     const socket = getSocket();
 
     socket.on("connect", () => {
@@ -133,6 +132,13 @@ class DataService {
     } catch {
       this.status = "offline";
     }
+  }
+
+  // Called on logout: allow a fresh subscription on the NEXT login (a new socket
+  // instance will be created and listeners re-registered by start()).
+  stop(): void {
+    this.started = false;
+    this.status = "connecting";
   }
 }
 

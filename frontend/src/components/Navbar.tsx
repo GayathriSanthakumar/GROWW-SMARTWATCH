@@ -5,7 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/store/auth";
 import { api } from "@/lib/api";
-import { getSocket } from "@/lib/socket";
+import { getSocket, disconnectSocket } from "@/lib/socket";
+import { dataService } from "@/services/DataService";
+import { useMarket } from "@/store/market";
 import { formatMarketAwareRelativeTime } from "@/lib/marketTime";
 
 interface NotificationItem {
@@ -89,8 +91,13 @@ export function Navbar() {
   }
 
   async function doLogout() {
-    await logout();
-    router.replace("/");
+    await logout(); // clear frontend auth state + server session cookie
+    // Tear down this session's live connections & market state so the next
+    // login starts a fresh stream and never leaks the previous user's data.
+    dataService.stop();
+    useMarket.getState().setOpen(false); // also clears cached quotes
+    disconnectSocket();
+    router.replace("/"); // '/' is the Sign In page
   }
 
   return (
