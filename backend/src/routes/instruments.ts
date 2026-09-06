@@ -3,7 +3,7 @@ import { asyncHandler } from "../lib/asyncHandler.js";
 import { query } from "../db/pool.js";
 import { notFound } from "../lib/errors.js";
 import { optionalAuth } from "../middleware/auth.js";
-import { getCandles } from "../services/candleService.js";
+import { getCandlesByInstrumentId } from "../services/marketHistory.js";
 
 const router = Router();
 
@@ -113,7 +113,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const interval = String(req.query.interval || "1d") as import("../services/candleService.js").CandleInterval;
     const limit = Math.min(Number(req.query.limit) || 90, 500);
-    const candles = await getCandles(req.params.id, interval, limit);
+    const candles = await getCandlesByInstrumentId(req.params.id, interval, limit);
     res.json({ candles });
   }),
 );
@@ -132,7 +132,7 @@ router.post(
     await Promise.all(
       ids.map(async (id) => {
         try {
-          out[id] = await getCandles(id, interval, limit);
+          out[id] = await getCandlesByInstrumentId(id, interval, limit);
         } catch {
           out[id] = [];
         }

@@ -23,6 +23,7 @@ A full-stack Indian-equity **smart market watchlist** built end-to-end (React/Ne
 - *State persists* server-side in Postgres per user (JWT + Row-Level Security), so it's identical across sessions/devices.
 - *Stale/conflicting data* is labelled, not hidden: auto STALE, NSE-vs-BSE CONFLICT, and a truthful delayed/last-close badge when the market is closed.
 - *Scaling*: batched multi-row feed writes, one SQL pass per user for change detection, and per-listener socket fan-out; provider interface ready for a licensed broker feed.
+- *Simple vs complex*: complexity was added only where it creates trust (real snapshots, honest data-status, no-fabrication rules); everything else stayed deliberately simple.
 
 ---
 
