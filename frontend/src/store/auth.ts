@@ -25,11 +25,13 @@ export const useAuth = create<AuthState>((set) => ({
     }
   },
   logout: async () => {
+    // Clear local state FIRST so navigation/redirects happen instantly even if
+    // the server revoke request hangs or the network is down.
+    set({ user: null, loading: false, initialized: true });
     try {
-      await api.post("/api/auth/logout");
+      await api.post("/api/auth/logout"); // revoke refresh token server-side (best-effort)
     } catch {
-      /* noop */
+      /* noop — session cookies are cleared client-side too */
     }
-    set({ user: null });
   },
 }));

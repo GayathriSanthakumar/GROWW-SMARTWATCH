@@ -90,10 +90,10 @@ export function Navbar() {
     setNotifs((n) => n.map((x) => (x.id === id ? { ...x, is_read: true } : x)));
   }
 
-  async function doLogout() {
-    await logout(); // clear frontend auth state + server session cookie
-    // Tear down this session's live connections & market state so the next
-    // login starts a fresh stream and never leaks the previous user's data.
+  function doLogout() {
+    // Navigate immediately — never block on the server revoke round-trip.
+    void logout(); // clears auth state synchronously, then best-effort server revoke
+    // Tear down this session's live connections & market state.
     dataService.stop();
     useMarket.getState().setOpen(false); // also clears cached quotes
     disconnectSocket();
