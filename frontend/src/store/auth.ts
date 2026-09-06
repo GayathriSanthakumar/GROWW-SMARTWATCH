@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api } from "@/lib/api";
+import { API_BASE } from "@/lib/api";
 import type { User } from "@/lib/types";
 
 interface AuthState {
@@ -29,7 +29,11 @@ export const useAuth = create<AuthState>((set) => ({
     // the server revoke request hangs or the network is down.
     set({ user: null, loading: false, initialized: true });
     try {
-      await api.post("/api/auth/logout"); // revoke refresh token server-side (best-effort)
+      await fetch(`${API_BASE}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        signal: AbortSignal.timeout(4000), // never let the revoke block logout
+      });
     } catch {
       /* noop — session cookies are cleared client-side too */
     }

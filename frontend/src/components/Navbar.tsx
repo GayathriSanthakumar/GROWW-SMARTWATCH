@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/store/auth";
 import { api } from "@/lib/api";
@@ -34,7 +34,6 @@ const LINKS = [
 
 export function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, logout } = useAuth();
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -95,13 +94,14 @@ export function Navbar() {
     if (loggingOut) return;
     setLoggingOut(true);
     setMenuOpen(false);
-    // Navigate immediately — never block on the server revoke round-trip.
-    void logout(); // clears auth state synchronously, then best-effort server revoke
-    // Tear down this session's live connections & market state.
+    // Clear auth synchronously, then tear down live streams.
+    void logout();
     dataService.stop();
-    useMarket.getState().setOpen(false); // also clears cached quotes
+    useMarket.getState().setOpen(false); // clears cached quotes
     disconnectSocket();
-    router.replace("/"); // '/' is the Sign In page
+    // Hard navigate (full page load) so no SPA/cached dashboard state can
+    // survive — the browser lands on the Sign In page only.
+    window.location.replace("/");
   }
 
   return (
