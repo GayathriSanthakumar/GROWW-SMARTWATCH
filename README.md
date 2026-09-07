@@ -69,6 +69,8 @@ click just exploring?Demo mode
 
 Or create new account
 
+if facing any issues try with other google acc and use the live link
+
 The live application is connected to the deployed backend and database. No local setup or configuration is required to test the project.
 
 Reviewers can simply open the live demo link, sign in using the demo credentials above, and explore the application.
@@ -80,5 +82,6 @@ The app is deployed on **Vercel** — no install, no keys
 
 
 ## Disclaimer
+SMARTWATCH displays real-time market values when fresh data is available. If the live feed is delayed for more than 1 minute, it switches to Simulator Mode using the latest values received before the delay. When live data resumes, it automatically switches back to the latest real-time values. 
 
 Educational research tool — not investment advice. SMARTWATCH does not execute trades or guarantee returns.
